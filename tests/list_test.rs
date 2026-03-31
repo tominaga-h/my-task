@@ -40,6 +40,7 @@ fn test_list_shows_open() {
     let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
     assert!(stdout.contains("Open one"));
     assert!(stdout.contains("Open two"));
+    assert!(stdout.contains("OPEN"));
     assert!(!stdout.contains("To complete"));
     assert!(stdout.contains("2 tasks"));
 }
@@ -87,8 +88,13 @@ fn test_list_all_flag() {
 
     let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
     assert!(stdout.contains("Open task"));
-    assert!(stdout.contains("\u{2713}"));
+    assert!(stdout.contains("OPEN"));
+    assert!(stdout.contains("DONE"));
     assert!(stdout.contains("Done task"));
+    assert!(
+        !stdout.contains("\u{2713}"),
+        "checkmark should no longer appear"
+    );
     assert!(stdout.contains("2 tasks (1 done)"));
 }
 

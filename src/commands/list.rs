@@ -2,7 +2,7 @@ use chrono::{Datelike, Local};
 use clap::Args;
 use comfy_table::modifiers::UTF8_SOLID_INNER_BORDERS;
 use comfy_table::presets::UTF8_FULL;
-use comfy_table::{CellAlignment, ContentArrangement, Table};
+use comfy_table::{Attribute, Cell, CellAlignment, Color, ContentArrangement, Table};
 
 use crate::config;
 use crate::db;
@@ -50,25 +50,27 @@ pub fn run(args: ListArgs) {
         .load_preset(UTF8_FULL)
         .apply_modifier(UTF8_SOLID_INNER_BORDERS)
         .set_content_arrangement(ContentArrangement::Dynamic)
-        .set_header(vec!["ID", "Title", "Project", "Due", "Age"]);
+        .set_header(vec![
+            Cell::new("ID").add_attribute(Attribute::Bold),
+            Cell::new("Status").add_attribute(Attribute::Bold),
+            Cell::new("Title").add_attribute(Attribute::Bold),
+            Cell::new("Project").add_attribute(Attribute::Bold),
+            Cell::new("Due").add_attribute(Attribute::Bold),
+            Cell::new("Age").add_attribute(Attribute::Bold),
+        ]);
 
     for task in &tasks {
-        let id_cell = format!("#{}", task.id);
+        let is_done = task.status == Status::Done;
+        let is_overdue = !is_done && task.due.is_some_and(|d| d < today);
+        let is_due_today = !is_done && task.due.is_some_and(|d| d == today);
 
-        let title_display = if task.status == Status::Done {
-            format!("\u{2713} {}", task.title)
-        } else {
-            task.title.clone()
-        };
-
-        let project_display = task.project.as_deref().unwrap_or_default().to_string();
-
-        let due_display = task
+        let id_text = format!("#{}", task.id);
+        let project_text = task.project.as_deref().unwrap_or_default().to_string();
+        let due_text = task
             .due
-            .map(|d| format!("\u{1f4c5} {}/{}", d.month(), d.day()))
+            .map(|d| format!("{}/{}", d.month(), d.day()))
             .unwrap_or_default();
-
-        let age_display = if task.status == Status::Done {
+        let age_text = if is_done {
             task.done_at
                 .map(|d| format!("done {}/{}", d.month(), d.day()))
                 .unwrap_or_default()
@@ -77,19 +79,57 @@ pub fn run(args: ListArgs) {
             format!("{}d", days)
         };
 
-        table.add_row(vec![
-            &id_cell,
-            &title_display,
-            &project_display,
-            &due_display,
-            &age_display,
-        ]);
+        if is_done {
+            let grey = Color::DarkGrey;
+            table.add_row(vec![
+                Cell::new(id_text).fg(grey),
+                Cell::new("DONE").fg(Color::Green),
+                Cell::new(&task.title).fg(grey),
+                Cell::new(project_text).fg(grey),
+                Cell::new(due_text).fg(grey),
+                Cell::new(age_text).fg(grey),
+            ]);
+        } else {
+            let title_cell = if is_overdue {
+                Cell::new(&task.title).fg(Color::Red)
+            } else {
+                Cell::new(&task.title)
+            };
+
+            let due_cell = if is_overdue {
+                Cell::new(due_text).fg(Color::Red)
+            } else if is_due_today {
+                Cell::new(due_text).fg(Color::Yellow)
+            } else if task.due.is_some() {
+                Cell::new(due_text).fg(Color::Green)
+            } else {
+                Cell::new(due_text)
+            };
+
+            let days = (today - task.created).num_days();
+            let age_cell = if days > 30 {
+                Cell::new(age_text).fg(Color::Red)
+            } else if days > 7 {
+                Cell::new(age_text).fg(Color::Yellow)
+            } else {
+                Cell::new(age_text)
+            };
+
+            table.add_row(vec![
+                Cell::new(id_text).fg(Color::Cyan),
+                Cell::new("OPEN").fg(Color::Blue),
+                title_cell,
+                Cell::new(project_text).fg(Color::Magenta),
+                due_cell,
+                age_cell,
+            ]);
+        }
     }
 
     let id_col = table.column_mut(0).expect("id column");
     id_col.set_cell_alignment(CellAlignment::Right);
 
-    let age_col = table.column_mut(4).expect("age column");
+    let age_col = table.column_mut(5).expect("age column");
     age_col.set_cell_alignment(CellAlignment::Right);
 
     println!("{table}");
