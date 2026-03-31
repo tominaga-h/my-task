@@ -91,3 +91,17 @@ fn test_list_all_flag() {
     assert!(stdout.contains("Done task"));
     assert!(stdout.contains("2 tasks (1 done)"));
 }
+
+#[test]
+fn test_ls_alias() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path).args(["add", "Alias test"]).assert().success();
+
+    let output = cmd(&db_path).args(["ls"]).assert().success();
+
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+    assert!(stdout.contains("Alias test"));
+    assert!(stdout.contains("1 tasks"));
+}

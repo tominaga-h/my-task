@@ -1,5 +1,8 @@
 use chrono::{Datelike, Local};
 use clap::Args;
+use comfy_table::modifiers::UTF8_SOLID_INNER_BORDERS;
+use comfy_table::presets::UTF8_FULL;
+use comfy_table::{CellAlignment, ContentArrangement, Table};
 
 use crate::config;
 use crate::db;
@@ -42,19 +45,23 @@ pub fn run(args: ListArgs) {
     let today = Local::now().date_naive();
     let done_count = tasks.iter().filter(|t| t.status == Status::Done).count();
 
+    let mut table = Table::new();
+    table
+        .load_preset(UTF8_FULL)
+        .apply_modifier(UTF8_SOLID_INNER_BORDERS)
+        .set_content_arrangement(ContentArrangement::Dynamic)
+        .set_header(vec!["ID", "Title", "Project", "Due", "Age"]);
+
     for task in &tasks {
+        let id_cell = format!("#{}", task.id);
+
         let title_display = if task.status == Status::Done {
-            let truncated = truncate(&task.title, 28);
-            format!("\u{2713} {}", truncated)
+            format!("\u{2713} {}", task.title)
         } else {
-            truncate(&task.title, 30)
+            task.title.clone()
         };
 
-        let project_display = task
-            .project
-            .as_deref()
-            .map(|p| truncate(p, 20))
-            .unwrap_or_default();
+        let project_display = task.project.as_deref().unwrap_or_default().to_string();
 
         let due_display = task
             .due
@@ -70,29 +77,27 @@ pub fn run(args: ListArgs) {
             format!("{}d", days)
         };
 
-        println!(
-            " {:>3}  {:<30}  {:<20}  {:<8}  {:>8}",
-            format!("#{}", task.id),
-            title_display,
-            project_display,
-            due_display,
-            age_display,
-        );
+        table.add_row(vec![
+            &id_cell,
+            &title_display,
+            &project_display,
+            &due_display,
+            &age_display,
+        ]);
     }
+
+    let id_col = table.column_mut(0).expect("id column");
+    id_col.set_cell_alignment(CellAlignment::Right);
+
+    let age_col = table.column_mut(4).expect("age column");
+    age_col.set_cell_alignment(CellAlignment::Right);
+
+    println!("{table}");
 
     println!();
     if args.all && done_count > 0 {
         println!("{} tasks ({} done)", tasks.len(), done_count);
     } else {
         println!("{} tasks", tasks.len());
-    }
-}
-
-fn truncate(s: &str, max: usize) -> String {
-    if s.chars().count() > max {
-        let truncated: String = s.chars().take(max - 1).collect();
-        format!("{}…", truncated)
-    } else {
-        s.to_string()
     }
 }

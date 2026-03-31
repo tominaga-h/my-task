@@ -19,6 +19,7 @@ enum Commands {
     /// Mark a task as done
     Done(commands::done::DoneArgs),
     /// List tasks
+    #[command(alias = "ls")]
     List(commands::list::ListArgs),
 }
 
