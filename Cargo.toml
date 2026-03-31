@@ -2,6 +2,14 @@
 name = "my_task"
 version = "0.1.0"
 edition = "2021"
+authors = ["tominaga-h"]
+description = "A simple CLI task manager powered by SQLite"
+readme = "README.md"
+license = "MIT"
+keywords = ["cli", "task", "todo", "productivity", "sqlite"]
+categories = ["command-line-utilities"]
+repository = "https://github.com/mad-tmng/my-task"
+rust-version = "1.93"
 
 [[bin]]
 name = "my-task"
