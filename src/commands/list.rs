@@ -45,6 +45,8 @@ pub fn run(args: ListArgs) {
     let today = Local::now().date_naive();
     let done_count = tasks.iter().filter(|t| t.status == Status::Done).count();
 
+    let project_colors = build_project_color_map(&tasks);
+
     let mut table = Table::new();
     table
         .load_preset(UTF8_FULL)
@@ -53,8 +55,8 @@ pub fn run(args: ListArgs) {
         .set_header(vec![
             Cell::new("ID").add_attribute(Attribute::Bold),
             Cell::new("Status").add_attribute(Attribute::Bold),
-            Cell::new("Title").add_attribute(Attribute::Bold),
             Cell::new("Project").add_attribute(Attribute::Bold),
+            Cell::new("Title").add_attribute(Attribute::Bold),
             Cell::new("Due").add_attribute(Attribute::Bold),
             Cell::new("Age").add_attribute(Attribute::Bold),
         ]);
@@ -84,8 +86,8 @@ pub fn run(args: ListArgs) {
             table.add_row(vec![
                 Cell::new(id_text).fg(grey),
                 Cell::new("DONE").fg(Color::Green),
-                Cell::new(&task.title).fg(grey),
                 Cell::new(project_text).fg(grey),
+                Cell::new(&task.title).fg(grey),
                 Cell::new(due_text).fg(grey),
                 Cell::new(age_text).fg(grey),
             ]);
@@ -118,8 +120,11 @@ pub fn run(args: ListArgs) {
             table.add_row(vec![
                 Cell::new(id_text).fg(Color::Cyan),
                 Cell::new("OPEN").fg(Color::Blue),
+                Cell::new(&project_text).fg(project_colors
+                    .get(project_text.as_str())
+                    .copied()
+                    .unwrap_or(Color::White)),
                 title_cell,
-                Cell::new(project_text).fg(Color::Magenta),
                 due_cell,
                 age_cell,
             ]);
@@ -140,4 +145,74 @@ pub fn run(args: ListArgs) {
     } else {
         println!("{} tasks", tasks.len());
     }
+}
+
+const PROJECT_PALETTE: &[Color] = &[
+    Color::Rgb {
+        r: 255,
+        g: 107,
+        b: 107,
+    }, // coral red
+    Color::Rgb {
+        r: 255,
+        g: 179,
+        b: 71,
+    }, // orange
+    Color::Rgb {
+        r: 255,
+        g: 217,
+        b: 61,
+    }, // golden yellow
+    Color::Rgb {
+        r: 119,
+        g: 221,
+        b: 119,
+    }, // pastel green
+    Color::Rgb {
+        r: 77,
+        g: 208,
+        b: 225,
+    }, // teal
+    Color::Rgb {
+        r: 129,
+        g: 140,
+        b: 248,
+    }, // periwinkle
+    Color::Rgb {
+        r: 192,
+        g: 132,
+        b: 252,
+    }, // lavender
+    Color::Rgb {
+        r: 244,
+        g: 114,
+        b: 182,
+    }, // pink
+    Color::Rgb {
+        r: 251,
+        g: 146,
+        b: 60,
+    }, // tangerine
+    Color::Rgb {
+        r: 45,
+        g: 212,
+        b: 191,
+    }, // turquoise
+];
+
+fn build_project_color_map(
+    tasks: &[crate::model::Task],
+) -> std::collections::HashMap<String, Color> {
+    use rand::Rng;
+    let mut rng = rand::rng();
+    let mut map = std::collections::HashMap::new();
+    for task in tasks {
+        if let Some(ref name) = task.project {
+            if !name.is_empty() && !map.contains_key(name) {
+                let idx = rng.random_range(0..PROJECT_PALETTE.len());
+                map.insert(name.clone(), PROJECT_PALETTE[idx]);
+            }
+        }
+    }
+    map
 }
