@@ -21,6 +21,26 @@ pub enum Status {
     Done,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub enum SortKey {
+    #[default]
+    Id,
+    Due,
+    Project,
+    Created,
+}
+
+impl SortKey {
+    pub fn as_sql(&self) -> &str {
+        match self {
+            SortKey::Id => "id",
+            SortKey::Due => "due IS NULL, due",
+            SortKey::Project => "project IS NULL, project",
+            SortKey::Created => "created",
+        }
+    }
+}
+
 impl Status {
     #[allow(dead_code)]
     pub fn as_str(&self) -> &str {

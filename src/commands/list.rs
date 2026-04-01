@@ -6,7 +6,7 @@ use comfy_table::{Attribute, Cell, CellAlignment, Color, ContentArrangement, Tab
 
 use crate::config;
 use crate::db;
-use crate::model::Status;
+use crate::model::{SortKey, Status};
 
 #[derive(Args)]
 pub struct ListArgs {
@@ -17,6 +17,10 @@ pub struct ListArgs {
     /// Filter by project name
     #[arg(short = 'P', long)]
     pub project: Option<String>,
+
+    /// Sort by: id, due, project, created
+    #[arg(short, long, default_value = "id")]
+    pub sort: String,
 }
 
 pub fn run(args: ListArgs) {
@@ -29,7 +33,18 @@ pub fn run(args: ListArgs) {
         }
     };
 
-    let tasks = match db::list_tasks(&conn, args.all, args.project.as_deref()) {
+    let sort = match args.sort.as_str() {
+        "id" => SortKey::Id,
+        "due" => SortKey::Due,
+        "project" => SortKey::Project,
+        "created" | "age" => SortKey::Created,
+        other => {
+            eprintln!("Error: unknown sort key '{}'. Use: id, due, project, created", other);
+            std::process::exit(1);
+        }
+    };
+
+    let tasks = match db::list_tasks(&conn, args.all, args.project.as_deref(), sort) {
         Ok(t) => t,
         Err(_) => {
             eprintln!("Error: failed to read database: {}", db_path.display());
