@@ -6,6 +6,20 @@ A simple CLI task manager powered by SQLite.
 
 > **This project is under active development.** Features and CLI interface may change without notice.
 
+## Table of Contents
+
+- [Installation](#installation)
+- [Usage](#usage)
+  - [Add a task](#add-a-task)
+  - [Fuzzy due dates](#fuzzy-due-dates)
+  - [Mark a task as done](#mark-a-task-as-done)
+  - [Edit a task](#edit-a-task)
+  - [List tasks](#list-tasks)
+  - [Task statuses](#task-statuses)
+- [Data storage](#data-storage)
+- [License](#license)
+- [Command Reference](#command-reference)
+
 ## Installation
 
 > **Note:** Currently only source installation is supported. A Rust toolchain is required.
