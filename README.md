@@ -75,7 +75,31 @@ my-task list -P my-app       # Filter by project
 my-task list --sort due      # Sort by: id, due, project, created
 ```
 
-## API Reference
+### Task statuses
+
+| Status | Description |
+|--------|-------------|
+| **Open** | Active task |
+| **Done** | Completed via `done` command |
+| **Closed** | Closed by deleting block in `edit -i` |
+
+## Data storage
+
+Task data is stored in a SQLite database at:
+
+```
+$XDG_DATA_HOME/my-task/tasks.db
+```
+
+Default: `~/.local/share/my-task/tasks.db`
+
+Override with the `MY_TASK_DATA_FILE` environment variable.
+
+## License
+
+MIT
+
+## Command Reference
 
 ### `my-task add <TITLE> [OPTIONS]`
 
@@ -148,27 +172,3 @@ List tasks in a table. Alias: `my-task ls`
 - Tasks with `--sort due`: tasks without a due date appear last.
 
 **Output footer:** `N tasks` or `N tasks (M done)`
-
-### Task statuses
-
-| Status | Description |
-|--------|-------------|
-| **Open** | Active task |
-| **Done** | Completed via `done` command |
-| **Closed** | Closed by deleting block in `edit -i` |
-
-## Data storage
-
-Task data is stored in a SQLite database at:
-
-```
-$XDG_DATA_HOME/my-task/tasks.db
-```
-
-Default: `~/.local/share/my-task/tasks.db`
-
-Override with the `MY_TASK_DATA_FILE` environment variable.
-
-## License
-
-MIT

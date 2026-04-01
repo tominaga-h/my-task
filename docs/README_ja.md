@@ -75,7 +75,31 @@ my-task list -P my-app       # プロジェクトで絞り込み
 my-task list --sort due      # ソート: id, due, project, created
 ```
 
-## APIリファレンス
+### タスクのステータス
+
+| ステータス | 説明 |
+|-----------|------|
+| **Open** | 未完了のタスク |
+| **Done** | `done` コマンドで完了 |
+| **Closed** | `edit -i` でブロック削除によりクローズ |
+
+## データ保存先
+
+タスクデータはSQLiteデータベースに保存されます:
+
+```
+$XDG_DATA_HOME/my-task/tasks.db
+```
+
+デフォルト: `~/.local/share/my-task/tasks.db`
+
+環境変数 `MY_TASK_DATA_FILE` で上書き可能です。
+
+## ライセンス
+
+MIT
+
+## コマンドリファレンス
 
 ### `my-task add <TITLE> [OPTIONS]`
 
@@ -148,27 +172,3 @@ my-task list --sort due      # ソート: id, due, project, created
 - `--sort due`: 期限未設定のタスクは末尾に表示。
 
 **フッター出力:** `N tasks` または `N tasks (M done)`
-
-### タスクのステータス
-
-| ステータス | 説明 |
-|-----------|------|
-| **Open** | 未完了のタスク |
-| **Done** | `done` コマンドで完了 |
-| **Closed** | `edit -i` でブロック削除によりクローズ |
-
-## データ保存先
-
-タスクデータはSQLiteデータベースに保存されます:
-
-```
-$XDG_DATA_HOME/my-task/tasks.db
-```
-
-デフォルト: `~/.local/share/my-task/tasks.db`
-
-環境変数 `MY_TASK_DATA_FILE` で上書き可能です。
-
-## ライセンス
-
-MIT
