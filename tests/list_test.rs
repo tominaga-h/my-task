@@ -103,22 +103,13 @@ fn test_list_closed_hidden_by_default() {
     let tmp = TempDir::new().unwrap();
     let db_path = tmp.path().join("tasks.db");
 
-    cmd(&db_path)
-        .args(["add", "Will close"])
-        .assert()
-        .success();
-    cmd(&db_path)
-        .args(["add", "Stay open"])
-        .assert()
-        .success();
+    cmd(&db_path).args(["add", "Will close"]).assert().success();
+    cmd(&db_path).args(["add", "Stay open"]).assert().success();
 
     // Close task via direct DB update (simulating interactive edit block deletion)
     let conn = rusqlite::Connection::open(&db_path).unwrap();
-    conn.execute(
-        "UPDATE tasks SET status = 'closed' WHERE id = 1",
-        [],
-    )
-    .unwrap();
+    conn.execute("UPDATE tasks SET status = 'closed' WHERE id = 1", [])
+        .unwrap();
 
     let output = cmd(&db_path).args(["list"]).assert().success();
     let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
@@ -132,21 +123,12 @@ fn test_list_closed_shown_with_all() {
     let tmp = TempDir::new().unwrap();
     let db_path = tmp.path().join("tasks.db");
 
-    cmd(&db_path)
-        .args(["add", "Will close"])
-        .assert()
-        .success();
-    cmd(&db_path)
-        .args(["add", "Stay open"])
-        .assert()
-        .success();
+    cmd(&db_path).args(["add", "Will close"]).assert().success();
+    cmd(&db_path).args(["add", "Stay open"]).assert().success();
 
     let conn = rusqlite::Connection::open(&db_path).unwrap();
-    conn.execute(
-        "UPDATE tasks SET status = 'closed' WHERE id = 1",
-        [],
-    )
-    .unwrap();
+    conn.execute("UPDATE tasks SET status = 'closed' WHERE id = 1", [])
+        .unwrap();
 
     let output = cmd(&db_path).args(["list", "--all"]).assert().success();
     let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
