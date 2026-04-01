@@ -1,4 +1,4 @@
-use crate::model::{Status, Task};
+use crate::model::{SortKey, Status, Task};
 use chrono::NaiveDate;
 use rusqlite::{params, Connection};
 use std::fs;
@@ -65,14 +65,25 @@ pub fn list_tasks(
     conn: &Connection,
     all: bool,
     project: Option<&str>,
+    sort: SortKey,
 ) -> Result<Vec<Task>, rusqlite::Error> {
-    let sql = match (all, project.is_some()) {
-        (true, true) => "SELECT id, title, status, source, project, due, done_at, created, updated FROM tasks WHERE project = ?1 ORDER BY id",
-        (true, false) => "SELECT id, title, status, source, project, due, done_at, created, updated FROM tasks ORDER BY id",
-        (false, true) => "SELECT id, title, status, source, project, due, done_at, created, updated FROM tasks WHERE status = 'open' AND project = ?1 ORDER BY id",
-        (false, false) => "SELECT id, title, status, source, project, due, done_at, created, updated FROM tasks WHERE status = 'open' ORDER BY id",
+    let base =
+        "SELECT id, title, status, source, project, due, done_at, created, updated FROM tasks";
+    let mut conditions = Vec::new();
+    if !all {
+        conditions.push("status = 'open'");
+    }
+    if project.is_some() {
+        conditions.push("project = ?1");
+    }
+    let where_clause = if conditions.is_empty() {
+        String::new()
+    } else {
+        format!(" WHERE {}", conditions.join(" AND "))
     };
-    let mut stmt = conn.prepare(sql)?;
+    let sql = format!("{}{} ORDER BY {}", base, where_clause, sort.as_sql());
+
+    let mut stmt = conn.prepare(&sql)?;
     let tasks: Vec<Task> = if let Some(p) = project {
         stmt.query_map(params![p], row_to_task)?
             .collect::<Result<Vec<_>, _>>()?
