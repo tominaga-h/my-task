@@ -19,6 +19,7 @@ pub struct Task {
 pub enum Status {
     Open,
     Done,
+    Closed,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -47,12 +48,14 @@ impl Status {
         match self {
             Status::Open => "open",
             Status::Done => "done",
+            Status::Closed => "closed",
         }
     }
 
     pub fn from_str(s: &str) -> Self {
         match s {
             "done" => Status::Done,
+            "closed" => Status::Closed,
             _ => Status::Open,
         }
     }
