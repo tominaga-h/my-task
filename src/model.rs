@@ -19,6 +19,27 @@ pub struct Task {
 pub enum Status {
     Open,
     Done,
+    Closed,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub enum SortKey {
+    #[default]
+    Id,
+    Due,
+    Project,
+    Created,
+}
+
+impl SortKey {
+    pub fn as_sql(&self) -> &str {
+        match self {
+            SortKey::Id => "id",
+            SortKey::Due => "due IS NULL, due",
+            SortKey::Project => "project IS NULL, project",
+            SortKey::Created => "created",
+        }
+    }
 }
 
 impl Status {
@@ -27,12 +48,14 @@ impl Status {
         match self {
             Status::Open => "open",
             Status::Done => "done",
+            Status::Closed => "closed",
         }
     }
 
     pub fn from_str(s: &str) -> Self {
         match s {
             "done" => Status::Done,
+            "closed" => Status::Closed,
             _ => Status::Open,
         }
     }

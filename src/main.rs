@@ -1,5 +1,6 @@
 mod commands;
 mod config;
+mod date_parser;
 mod db;
 mod model;
 
@@ -18,6 +19,8 @@ enum Commands {
     Add(commands::add::AddArgs),
     /// Mark a task as done
     Done(commands::done::DoneArgs),
+    /// Edit a task
+    Edit(commands::edit::EditArgs),
     /// List tasks
     #[command(alias = "ls")]
     List(commands::list::ListArgs),
@@ -28,6 +31,7 @@ fn main() {
     match cli.command {
         Commands::Add(args) => commands::add::run(args),
         Commands::Done(args) => commands::done::run(args),
+        Commands::Edit(args) => commands::edit::run(args),
         Commands::List(args) => commands::list::run(args),
     }
 }

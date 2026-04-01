@@ -6,7 +6,7 @@ use comfy_table::{Attribute, Cell, CellAlignment, Color, ContentArrangement, Tab
 
 use crate::config;
 use crate::db;
-use crate::model::Status;
+use crate::model::{SortKey, Status};
 
 #[derive(Args)]
 pub struct ListArgs {
@@ -17,6 +17,10 @@ pub struct ListArgs {
     /// Filter by project name
     #[arg(short = 'P', long)]
     pub project: Option<String>,
+
+    /// Sort by: id, due, project, created
+    #[arg(short, long, default_value = "id")]
+    pub sort: String,
 }
 
 pub fn run(args: ListArgs) {
@@ -29,7 +33,21 @@ pub fn run(args: ListArgs) {
         }
     };
 
-    let tasks = match db::list_tasks(&conn, args.all, args.project.as_deref()) {
+    let sort = match args.sort.as_str() {
+        "id" => SortKey::Id,
+        "due" => SortKey::Due,
+        "project" => SortKey::Project,
+        "created" | "age" => SortKey::Created,
+        other => {
+            eprintln!(
+                "Error: unknown sort key '{}'. Use: id, due, project, created",
+                other
+            );
+            std::process::exit(1);
+        }
+    };
+
+    let tasks = match db::list_tasks(&conn, args.all, args.project.as_deref(), sort) {
         Ok(t) => t,
         Err(_) => {
             eprintln!("Error: failed to read database: {}", db_path.display());
@@ -43,7 +61,10 @@ pub fn run(args: ListArgs) {
     }
 
     let today = Local::now().date_naive();
-    let done_count = tasks.iter().filter(|t| t.status == Status::Done).count();
+    let done_count = tasks
+        .iter()
+        .filter(|t| t.status == Status::Done || t.status == Status::Closed)
+        .count();
 
     let project_colors = build_project_color_map(&tasks);
 
@@ -63,8 +84,10 @@ pub fn run(args: ListArgs) {
 
     for task in &tasks {
         let is_done = task.status == Status::Done;
-        let is_overdue = !is_done && task.due.is_some_and(|d| d < today);
-        let is_due_today = !is_done && task.due.is_some_and(|d| d == today);
+        let is_closed = task.status == Status::Closed;
+        let is_inactive = is_done || is_closed;
+        let is_overdue = !is_inactive && task.due.is_some_and(|d| d < today);
+        let is_due_today = !is_inactive && task.due.is_some_and(|d| d == today);
 
         let id_text = format!("#{}", task.id);
         let project_text = task.project.as_deref().unwrap_or_default().to_string();
@@ -76,16 +99,31 @@ pub fn run(args: ListArgs) {
             task.done_at
                 .map(|d| format!("done {}/{}", d.month(), d.day()))
                 .unwrap_or_default()
+        } else if is_closed {
+            "closed".to_string()
         } else {
             let days = (today - task.created).num_days();
             format!("{}d", days)
         };
 
         if is_done {
+            let green = Color::Green;
+            table.add_row(vec![
+                Cell::new(id_text).fg(green),
+                Cell::new("DONE").fg(green),
+                Cell::new(&project_text).fg(project_colors
+                    .get(project_text.as_str())
+                    .copied()
+                    .unwrap_or(Color::White)),
+                Cell::new(&task.title).fg(green),
+                Cell::new(due_text).fg(green),
+                Cell::new(age_text).fg(green),
+            ]);
+        } else if is_closed {
             let grey = Color::DarkGrey;
             table.add_row(vec![
                 Cell::new(id_text).fg(grey),
-                Cell::new("DONE").fg(Color::Green),
+                Cell::new("CLOSED").fg(grey),
                 Cell::new(project_text).fg(grey),
                 Cell::new(&task.title).fg(grey),
                 Cell::new(due_text).fg(grey),

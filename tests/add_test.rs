@@ -73,6 +73,55 @@ fn test_add_auto_id() {
 }
 
 #[test]
+fn test_add_fuzzy_due_today() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["add", "Fuzzy task", "--due", "今日"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Added: #1"));
+
+    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    let due: Option<String> = conn
+        .query_row("SELECT due FROM tasks WHERE id = 1", [], |row| row.get(0))
+        .unwrap();
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    assert_eq!(due, Some(today));
+}
+
+#[test]
+fn test_add_fuzzy_due_tomorrow() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["add", "Tomorrow task", "--due", "明日"])
+        .assert()
+        .success();
+
+    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    let due: Option<String> = conn
+        .query_row("SELECT due FROM tasks WHERE id = 1", [], |row| row.get(0))
+        .unwrap();
+    let tomorrow = (chrono::Local::now().date_naive() + chrono::Duration::days(1)).to_string();
+    assert_eq!(due, Some(tomorrow));
+}
+
+#[test]
+fn test_add_invalid_due() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["add", "Bad due", "--due", "aaaa"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("invalid due date"));
+}
+
+#[test]
 fn test_add_empty_title() {
     let tmp = TempDir::new().unwrap();
     let db_path = tmp.path().join("tasks.db");
