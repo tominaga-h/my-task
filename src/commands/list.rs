@@ -106,16 +106,24 @@ pub fn run(args: ListArgs) {
             format!("{}d", days)
         };
 
-        if is_inactive {
+        if is_done {
+            let green = Color::Green;
+            table.add_row(vec![
+                Cell::new(id_text).fg(green),
+                Cell::new("DONE").fg(green),
+                Cell::new(&project_text).fg(project_colors
+                    .get(project_text.as_str())
+                    .copied()
+                    .unwrap_or(Color::White)),
+                Cell::new(&task.title).fg(green),
+                Cell::new(due_text).fg(green),
+                Cell::new(age_text).fg(green),
+            ]);
+        } else if is_closed {
             let grey = Color::DarkGrey;
-            let status_cell = if is_done {
-                Cell::new("DONE").fg(Color::Green)
-            } else {
-                Cell::new("CLOSED").fg(Color::DarkGrey)
-            };
             table.add_row(vec![
                 Cell::new(id_text).fg(grey),
-                status_cell,
+                Cell::new("CLOSED").fg(grey),
                 Cell::new(project_text).fg(grey),
                 Cell::new(&task.title).fg(grey),
                 Cell::new(due_text).fg(grey),
