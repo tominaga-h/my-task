@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::io::{Read, Write};
 
 use crate::config;
+use crate::date_parser;
 use crate::db;
 use crate::model::{SortKey, Task};
 
@@ -20,9 +21,9 @@ pub struct EditArgs {
     #[arg(short, long)]
     pub project: Option<String>,
 
-    /// New due date (YYYY-MM-DD)
+    /// New due date (YYYY-MM-DD, 今日, 明日, 来週, 月曜〜日曜, etc.)
     #[arg(short, long)]
-    pub due: Option<NaiveDate>,
+    pub due: Option<String>,
 
     /// Open in editor (like git rebase -i)
     #[arg(short = 'i', long)]
@@ -87,13 +88,20 @@ fn run_flag(args: EditArgs) {
         }
     }
 
+    let due = args.due.as_ref().map(|s| {
+        date_parser::parse_fuzzy_date(s).unwrap_or_else(|| {
+            eprintln!("Error: invalid due date '{}'. Use: YYYY-MM-DD, 今日, 明日, 来週, 曜日名 etc.", s);
+            std::process::exit(1);
+        })
+    });
+
     let today = Local::now().date_naive();
     if db::update_task(
         &conn,
         id,
         args.title.as_deref(),
         args.project.as_deref(),
-        args.due,
+        due,
         today,
     )
     .is_err()
