@@ -112,6 +112,20 @@ fn test_edit_not_found() {
 }
 
 #[test]
+fn test_edit_empty_title() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path).args(["add", "Task"]).assert().success();
+
+    cmd(&db_path)
+        .args(["edit", "1", "--title", ""])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("title cannot be empty"));
+}
+
+#[test]
 fn test_edit_no_flags() {
     let tmp = TempDir::new().unwrap();
     let db_path = tmp.path().join("tasks.db");

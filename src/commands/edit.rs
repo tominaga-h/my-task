@@ -418,6 +418,13 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_yaml_empty_input() {
+        let input = "# only comments\n\n";
+        let entries = parse_yaml(input);
+        assert_eq!(entries.len(), 0);
+    }
+
+    #[test]
     fn test_tasks_to_yaml_roundtrip() {
         let tasks = vec![Task {
             id: 1,

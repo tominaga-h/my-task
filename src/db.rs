@@ -275,4 +275,41 @@ mod tests {
         assert_eq!(task.status, Status::Done);
         assert_eq!(task.done_at, Some(today()));
     }
+
+    #[test]
+    fn test_update_task_title() {
+        let conn = open_in_memory().unwrap();
+        let id = add_task(&conn, "Old title", None, None, today()).unwrap();
+        update_task(&conn, id, Some("New title"), None, None, today()).unwrap();
+        let task = find_task(&conn, id).unwrap().expect("task should exist");
+        assert_eq!(task.title, "New title");
+    }
+
+    #[test]
+    fn test_update_task_multiple_fields() {
+        let conn = open_in_memory().unwrap();
+        let due = NaiveDate::from_ymd_opt(2026, 5, 1).unwrap();
+        let id = add_task(&conn, "Task", None, None, today()).unwrap();
+        update_task(&conn, id, Some("Updated"), Some("proj"), Some(due), today()).unwrap();
+        let task = find_task(&conn, id).unwrap().expect("task should exist");
+        assert_eq!(task.title, "Updated");
+        assert_eq!(task.project, Some("proj".to_string()));
+        assert_eq!(task.due, Some(due));
+    }
+
+    #[test]
+    fn test_close_task() {
+        let conn = open_in_memory().unwrap();
+        let id = add_task(&conn, "Close me", None, None, today()).unwrap();
+        close_task(&conn, id, today()).unwrap();
+        let task = find_task(&conn, id).unwrap().expect("task should exist");
+        assert_eq!(task.status, Status::Closed);
+    }
+
+    #[test]
+    fn test_find_task_not_found() {
+        let conn = open_in_memory().unwrap();
+        let result = find_task(&conn, 999).unwrap();
+        assert!(result.is_none());
+    }
 }
