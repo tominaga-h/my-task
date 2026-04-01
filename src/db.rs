@@ -94,6 +94,58 @@ pub fn list_tasks(
     Ok(tasks)
 }
 
+pub fn update_task(
+    conn: &Connection,
+    id: u32,
+    title: Option<&str>,
+    project: Option<&str>,
+    due: Option<NaiveDate>,
+    today: NaiveDate,
+) -> Result<(), rusqlite::Error> {
+    let today_str = today.to_string();
+    let mut sets = vec!["updated = ?1"];
+    let mut param_idx = 2u32;
+    let mut values: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(today_str)];
+
+    if let Some(t) = title {
+        sets.push("title = ?2");
+        values.push(Box::new(t.to_string()));
+        param_idx = 3;
+    }
+    if let Some(p) = project {
+        let placeholder = if param_idx == 2 { "?2" } else { "?3" };
+        sets.push(if placeholder == "?2" {
+            "project = ?2"
+        } else {
+            "project = ?3"
+        });
+        values.push(Box::new(p.to_string()));
+        param_idx += 1;
+    }
+    if let Some(d) = due {
+        let placeholder = match param_idx {
+            2 => "due = ?2",
+            3 => "due = ?3",
+            _ => "due = ?4",
+        };
+        sets.push(placeholder);
+        values.push(Box::new(d.to_string()));
+        param_idx += 1;
+    }
+
+    let id_placeholder = format!("?{}", param_idx);
+    let sql = format!(
+        "UPDATE tasks SET {} WHERE id = {}",
+        sets.join(", "),
+        id_placeholder
+    );
+    values.push(Box::new(id));
+
+    let params: Vec<&dyn rusqlite::types::ToSql> = values.iter().map(|v| v.as_ref()).collect();
+    conn.execute(&sql, params.as_slice())?;
+    Ok(())
+}
+
 fn parse_date(s: &str) -> NaiveDate {
     NaiveDate::parse_from_str(s, "%Y-%m-%d").expect("invalid date in database")
 }
