@@ -39,7 +39,10 @@ pub fn run(args: ListArgs) {
         "project" => SortKey::Project,
         "created" | "age" => SortKey::Created,
         other => {
-            eprintln!("Error: unknown sort key '{}'. Use: id, due, project, created", other);
+            eprintln!(
+                "Error: unknown sort key '{}'. Use: id, due, project, created",
+                other
+            );
             std::process::exit(1);
         }
     };

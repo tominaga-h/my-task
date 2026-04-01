@@ -67,7 +67,8 @@ pub fn list_tasks(
     project: Option<&str>,
     sort: SortKey,
 ) -> Result<Vec<Task>, rusqlite::Error> {
-    let base = "SELECT id, title, status, source, project, due, done_at, created, updated FROM tasks";
+    let base =
+        "SELECT id, title, status, source, project, due, done_at, created, updated FROM tasks";
     let mut conditions = Vec::new();
     if !all {
         conditions.push("status = 'open'");
