@@ -14,7 +14,7 @@ pub fn open(path: &Path) -> Result<Connection, rusqlite::Error> {
         "CREATE TABLE IF NOT EXISTS tasks (
             id      INTEGER PRIMARY KEY AUTOINCREMENT,
             title   TEXT    NOT NULL,
-            status  TEXT    NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'done')),
+            status  TEXT    NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'done', 'closed')),
             source  TEXT    NOT NULL DEFAULT 'private',
             project TEXT,
             due     TEXT,
@@ -23,7 +23,39 @@ pub fn open(path: &Path) -> Result<Connection, rusqlite::Error> {
             updated TEXT    NOT NULL
         );",
     )?;
+    // Migrate: add 'closed' to CHECK constraint for existing databases
+    migrate_status_check(&conn)?;
     Ok(conn)
+}
+
+fn migrate_status_check(conn: &Connection) -> Result<(), rusqlite::Error> {
+    let sql: String = conn.query_row(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='tasks'",
+        [],
+        |row| row.get(0),
+    )?;
+    if sql.contains("'closed'") {
+        return Ok(());
+    }
+    conn.execute_batch(
+        "BEGIN;
+         CREATE TABLE tasks_new (
+            id      INTEGER PRIMARY KEY AUTOINCREMENT,
+            title   TEXT    NOT NULL,
+            status  TEXT    NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'done', 'closed')),
+            source  TEXT    NOT NULL DEFAULT 'private',
+            project TEXT,
+            due     TEXT,
+            done_at TEXT,
+            created TEXT    NOT NULL,
+            updated TEXT    NOT NULL
+         );
+         INSERT INTO tasks_new SELECT * FROM tasks;
+         DROP TABLE tasks;
+         ALTER TABLE tasks_new RENAME TO tasks;
+         COMMIT;",
+    )?;
+    Ok(())
 }
 
 pub fn add_task(
@@ -50,6 +82,15 @@ pub fn find_task(conn: &Connection, id: u32) -> Result<Option<Task>, rusqlite::E
     )?;
     let mut rows = stmt.query_map(params![id], row_to_task)?;
     rows.next().transpose()
+}
+
+pub fn close_task(conn: &Connection, id: u32, today: NaiveDate) -> Result<(), rusqlite::Error> {
+    let today_str = today.to_string();
+    conn.execute(
+        "UPDATE tasks SET status = 'closed', updated = ?1 WHERE id = ?2",
+        params![today_str, id],
+    )?;
+    Ok(())
 }
 
 pub fn complete_task(conn: &Connection, id: u32, today: NaiveDate) -> Result<(), rusqlite::Error> {
@@ -185,7 +226,7 @@ mod tests {
             "CREATE TABLE IF NOT EXISTS tasks (
                 id      INTEGER PRIMARY KEY AUTOINCREMENT,
                 title   TEXT    NOT NULL,
-                status  TEXT    NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'done')),
+                status  TEXT    NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'done', 'closed')),
                 source  TEXT    NOT NULL DEFAULT 'private',
                 project TEXT,
                 due     TEXT,

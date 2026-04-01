@@ -61,7 +61,10 @@ pub fn run(args: ListArgs) {
     }
 
     let today = Local::now().date_naive();
-    let done_count = tasks.iter().filter(|t| t.status == Status::Done).count();
+    let done_count = tasks
+        .iter()
+        .filter(|t| t.status == Status::Done || t.status == Status::Closed)
+        .count();
 
     let project_colors = build_project_color_map(&tasks);
 
@@ -81,8 +84,10 @@ pub fn run(args: ListArgs) {
 
     for task in &tasks {
         let is_done = task.status == Status::Done;
-        let is_overdue = !is_done && task.due.is_some_and(|d| d < today);
-        let is_due_today = !is_done && task.due.is_some_and(|d| d == today);
+        let is_closed = task.status == Status::Closed;
+        let is_inactive = is_done || is_closed;
+        let is_overdue = !is_inactive && task.due.is_some_and(|d| d < today);
+        let is_due_today = !is_inactive && task.due.is_some_and(|d| d == today);
 
         let id_text = format!("#{}", task.id);
         let project_text = task.project.as_deref().unwrap_or_default().to_string();
@@ -94,16 +99,23 @@ pub fn run(args: ListArgs) {
             task.done_at
                 .map(|d| format!("done {}/{}", d.month(), d.day()))
                 .unwrap_or_default()
+        } else if is_closed {
+            "closed".to_string()
         } else {
             let days = (today - task.created).num_days();
             format!("{}d", days)
         };
 
-        if is_done {
+        if is_inactive {
             let grey = Color::DarkGrey;
+            let status_cell = if is_done {
+                Cell::new("DONE").fg(Color::Green)
+            } else {
+                Cell::new("CLOSED").fg(Color::DarkGrey)
+            };
             table.add_row(vec![
                 Cell::new(id_text).fg(grey),
-                Cell::new("DONE").fg(Color::Green),
+                status_cell,
                 Cell::new(project_text).fg(grey),
                 Cell::new(&task.title).fg(grey),
                 Cell::new(due_text).fg(grey),

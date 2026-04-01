@@ -183,10 +183,24 @@ fn run_interactive(id: Option<u32>, filter_project: Option<String>) {
 
     let original_map: HashMap<u32, &Task> = tasks.iter().map(|t| (t.id, t)).collect();
     let parsed = parse_yaml(&edited);
+    let parsed_ids: std::collections::HashSet<u32> = parsed.iter().map(|e| e.id).collect();
 
     let today = Local::now().date_naive();
     let mut updated_count = 0u32;
+    let mut closed_count = 0u32;
 
+    // Close tasks whose blocks were deleted
+    for task in &tasks {
+        if !parsed_ids.contains(&task.id) {
+            if db::close_task(&conn, task.id, today).is_err() {
+                eprintln!("Error: failed to close task #{}", task.id);
+                std::process::exit(1);
+            }
+            closed_count += 1;
+        }
+    }
+
+    // Update tasks with changes
     for entry in &parsed {
         let orig = match original_map.get(&entry.id) {
             Some(t) => t,
@@ -225,17 +239,24 @@ fn run_interactive(id: Option<u32>, filter_project: Option<String>) {
         updated_count += 1;
     }
 
-    if updated_count == 0 {
+    if updated_count == 0 && closed_count == 0 {
         println!("No changes");
     } else {
-        println!("Updated {} tasks", updated_count);
+        let mut parts = Vec::new();
+        if updated_count > 0 {
+            parts.push(format!("Updated {} tasks", updated_count));
+        }
+        if closed_count > 0 {
+            parts.push(format!("Closed {} tasks", closed_count));
+        }
+        println!("{}", parts.join(", "));
     }
 }
 
 fn tasks_to_yaml(tasks: &[Task]) -> String {
     let mut out = String::new();
     out.push_str("# my-task edit: 編集して保存してください\n");
-    out.push_str("# 行やブロックを削除すると変更をスキップします\n");
+    out.push_str("# 行やブロックを削除するとタスクをクローズします\n");
     out.push_str("# id は変更できません\n");
 
     for task in tasks {
@@ -298,16 +319,22 @@ fn parse_yaml(input: &str) -> Vec<EditEntry> {
             current_title = Some(val.to_string());
         } else if trimmed.starts_with("project:") {
             let val = trimmed.trim_start_matches("project:").trim();
-            current_project = if val.is_empty() { None } else { Some(val.to_string()) };
+            current_project = if val.is_empty() {
+                None
+            } else {
+                Some(val.to_string())
+            };
         } else if trimmed.starts_with("due:") {
             let val = trimmed.trim_start_matches("due:").trim();
             current_due = if val.is_empty() {
                 None
             } else {
-                Some(NaiveDate::parse_from_str(val, "%Y-%m-%d").unwrap_or_else(|_| {
-                    eprintln!("Error: failed to parse edit file at line {}", line_num + 1);
-                    std::process::exit(1);
-                }))
+                Some(
+                    NaiveDate::parse_from_str(val, "%Y-%m-%d").unwrap_or_else(|_| {
+                        eprintln!("Error: failed to parse edit file at line {}", line_num + 1);
+                        std::process::exit(1);
+                    }),
+                )
             };
         }
     }
