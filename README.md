@@ -98,3 +98,77 @@ Override with the `MY_TASK_DATA_FILE` environment variable.
 ## License
 
 MIT
+
+## Command Reference
+
+### `my-task add <TITLE> [OPTIONS]`
+
+Add a new task.
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--project <NAME>` | `-p` | Assign to a project |
+| `--due <DATE>` | `-d` | Set due date (YYYY-MM-DD or fuzzy input) |
+
+- `<TITLE>` is required and must not be empty.
+- Output: `Added: #<ID> <TITLE>`
+- Exit code `1` if title is empty or due date is invalid.
+
+### `my-task done <ID>`
+
+Mark a task as done. Sets status to `done` and records the completion date.
+
+- `<ID>` is required (positive integer).
+- Output: `Done: #<ID> <TITLE>`
+- Exit code `1` if the task is not found or already done.
+
+### `my-task edit [ID] [OPTIONS]`
+
+Edit an existing task. Two modes are available:
+
+#### Flag mode
+
+Requires `<ID>` and at least one of `--title`, `--project`, or `--due`.
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--title <TEXT>` | `-t` | Set new title (must not be empty) |
+| `--project <NAME>` | `-p` | Set new project name |
+| `--due <DATE>` | `-d` | Set new due date (YYYY-MM-DD or fuzzy input) |
+
+- Output: `Updated: #<ID> <TITLE>`
+- Exit code `1` if no flags given, task not found, or title is empty.
+
+#### Interactive mode (`-i` / `--interactive`)
+
+Opens `$EDITOR` (fallback: `vi`) with tasks in YAML format.
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--interactive` | `-i` | Enable editor mode |
+| `--filter-project <NAME>` | `-P` | Filter tasks by project (only with `-i`) |
+
+- `[ID]` is optional: if given, edits a single task; if omitted, edits all open tasks.
+- Deleting a task block in the editor **closes** that task (sets status to `closed`).
+- Only changed tasks are updated. Unchanged tasks are skipped.
+- Output: `Updated N tasks`, `Closed N tasks`, or `No changes`
+- `-i` cannot be combined with `--title`, `--project`, or `--due`.
+
+### `my-task list [OPTIONS]`
+
+List tasks in a table. Alias: `my-task ls`
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--all` | `-a` | `false` | Show all tasks including done and closed |
+| `--project <NAME>` | `-P` | — | Filter by project name |
+| `--sort <KEY>` | `-s` | `id` | Sort by: `id`, `due`, `project`, `created` (`age` is alias for `created`) |
+
+**Display rules:**
+- Open tasks: default colors. Overdue titles/due dates shown in red, due today in yellow, future due in green.
+- Done tasks: all columns in green (except project, which keeps its assigned color).
+- Closed tasks: all columns in dark grey.
+- Age column: `>30d` red, `>7d` yellow.
+- Tasks with `--sort due`: tasks without a due date appear last.
+
+**Output footer:** `N tasks` or `N tasks (M done)`
