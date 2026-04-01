@@ -9,7 +9,7 @@ use chrono::{Datelike, Local, NaiveDate};
 ///   - 来週 / next week (7日後)
 ///   - 来月 / next month
 ///   - 月曜〜日曜 / mon〜sun (次のその曜日)
-/// 返り値が None の場合はパース失敗。
+///     返り値が None の場合はパース失敗。
 pub fn parse_fuzzy_date(input: &str) -> Option<NaiveDate> {
     let today = Local::now().date_naive();
     let s = input.trim().to_lowercase();
@@ -45,7 +45,7 @@ pub fn parse_fuzzy_date(input: &str) -> Option<NaiveDate> {
     }
 }
 
-fn next_weekday(from: NaiveDate, target: chrono::Weekday, ) -> NaiveDate {
+fn next_weekday(from: NaiveDate, target: chrono::Weekday) -> NaiveDate {
     let current = from.weekday().num_days_from_monday();
     let target_num = target.num_days_from_monday();
     let days_ahead = if target_num <= current {

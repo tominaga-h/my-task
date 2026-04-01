@@ -90,7 +90,10 @@ fn run_flag(args: EditArgs) {
 
     let due = args.due.as_ref().map(|s| {
         date_parser::parse_fuzzy_date(s).unwrap_or_else(|| {
-            eprintln!("Error: invalid due date '{}'. Use: YYYY-MM-DD, 今日, 明日, 来週, 曜日名 etc.", s);
+            eprintln!(
+                "Error: invalid due date '{}'. Use: YYYY-MM-DD, 今日, 明日, 来週, 曜日名 etc.",
+                s
+            );
             std::process::exit(1);
         })
     });
