@@ -6,7 +6,11 @@ A simple CLI task manager powered by SQLite.
 
 ## Installation
 
+> **Note:** Currently only source installation is supported. A Rust toolchain is required.
+
 ```bash
+git clone https://github.com/mad-tmng/my-task.git
+cd my-task
 cargo install --path .
 ```
 

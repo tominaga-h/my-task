@@ -6,7 +6,11 @@ SQLiteベースのシンプルなCLIタスクマネージャー。
 
 ## インストール
 
+> **注意:** 現在はソースからのインストールのみ対応しています。Rustツールチェーンが必要です。
+
 ```bash
+git clone https://github.com/mad-tmng/my-task.git
+cd my-task
 cargo install --path .
 ```
 
