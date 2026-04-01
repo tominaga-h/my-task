@@ -4,6 +4,8 @@ A simple CLI task manager powered by SQLite.
 
 [日本語ドキュメント](docs/README_ja.md)
 
+> **This project is under active development.** Features and CLI interface may change without notice.
+
 ## Installation
 
 > **Note:** Currently only source installation is supported. A Rust toolchain is required.
