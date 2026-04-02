@@ -17,6 +17,7 @@ SQLiteベースのシンプルなCLIタスクマネージャー。
   - [タスクの一覧表示](#タスクの一覧表示)
   - [タスクのステータス](#タスクのステータス)
 - [データ保存先](#データ保存先)
+- [Claude Code プラグイン](#claude-code-プラグイン)
 - [ライセンス](#ライセンス)
 - [コマンドリファレンス](#コマンドリファレンス)
 
@@ -108,6 +109,19 @@ $XDG_DATA_HOME/my-task/tasks.db
 デフォルト: `~/.local/share/my-task/tasks.db`
 
 環境変数 `MY_TASK_DATA_FILE` で上書き可能です。
+
+## Claude Code プラグイン
+
+`cc-plugin/` には、このプロジェクト向けの Claude Code プラグインが含まれています。`task-dev-cycle` コマンドにより、`my-task` のタスク選択から実装・テスト・完了までの開発サイクルを支援します。
+
+マーケットプレイスからのインストール:
+
+```bash
+/plugin marketplace add tominaga-h/my-task
+/plugin install task-dev-cycle@my-task
+```
+
+インストール後は `/task-dev-cycle` を実行してください。利用時は、事前に `my-task` コマンドが使える状態である必要があります。
 
 ## ライセンス
 

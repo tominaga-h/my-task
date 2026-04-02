@@ -17,6 +17,7 @@ A simple CLI task manager powered by SQLite.
   - [List tasks](#list-tasks)
   - [Task statuses](#task-statuses)
 - [Data storage](#data-storage)
+- [Claude Code Plugin](#claude-code-plugin)
 - [License](#license)
 - [Command Reference](#command-reference)
 
@@ -108,6 +109,19 @@ $XDG_DATA_HOME/my-task/tasks.db
 Default: `~/.local/share/my-task/tasks.db`
 
 Override with the `MY_TASK_DATA_FILE` environment variable.
+
+## Claude Code Plugin
+
+`cc-plugin/` contains the Claude Code plugin for this project. It provides the `task-dev-cycle` command, which helps drive a development workflow around `my-task` tasks, from task selection through implementation, testing, and completion.
+
+Install it from the marketplace with:
+
+```bash
+/plugin marketplace add tominaga-h/my-task
+/plugin install task-dev-cycle@my-task
+```
+
+After installation, run `/task-dev-cycle`. The plugin expects the `my-task` command to already be available in your environment.
 
 ## License
 
