@@ -15,7 +15,7 @@ pub struct ListArgs {
     pub all: bool,
 
     /// Filter by project name
-    #[arg(short = 'P', long)]
+    #[arg(short, long)]
     pub project: Option<String>,
 
     /// Sort by: id, due, project, created

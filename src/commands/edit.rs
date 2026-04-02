@@ -30,7 +30,7 @@ pub struct EditArgs {
     pub interactive: bool,
 
     /// Filter by project (with -i)
-    #[arg(short = 'P', long = "filter-project")]
+    #[arg(long = "filter-project")]
     pub filter_project: Option<String>,
 }
 
