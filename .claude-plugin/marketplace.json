@@ -8,7 +8,7 @@
   },
   "plugins": [
     {
-      "name": "my-task",
+      "name": "task-dev-cycle",
       "source": "./cc-plugin",
       "description": "my-task スキル。タスク管理から開発サイクルまでを行う。",
       "version": "1.0.0",

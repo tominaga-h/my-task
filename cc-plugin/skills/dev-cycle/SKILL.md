@@ -1,10 +1,10 @@
 ---
-name: dev-cycle
+name: task-dev-cycle
 description: >-
   my-taskコマンドに登録されたタスクに基づき、プロジェクトの開発サイクルを回すスキル
 argument-hint: "[#タスクID] (省略時はタスク一覧から選択)"
 allowed-tools: ["Read", "Edit", "Write", "Bash", "Glob", "Grep", "Agent", "AskUserQuestion", "TaskCreate", "TaskUpdate"]
-trigger: /my-task-dev-cycle
+trigger: /task-dev-cycle
 ---
 
 # dev-cycle - my-task 駆動の開発サイクル
