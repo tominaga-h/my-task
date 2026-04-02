@@ -6,6 +6,8 @@ A simple CLI task manager powered by SQLite.
 
 > **This project is under active development.** Features and CLI interface may change without notice.
 
+![DEMO](./images/demo-list-all.png)
+
 ## Table of Contents
 
 - [Installation](#installation)
@@ -89,6 +91,8 @@ my-task list --all           # Include done/closed tasks
 my-task list -P my-app       # Filter by project
 my-task list --sort due      # Sort by: id, due, project, created
 ```
+
+![DEMO](./images/demo-list.png)
 
 ### Task statuses
 

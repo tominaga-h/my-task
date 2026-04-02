@@ -6,6 +6,8 @@ SQLiteベースのシンプルなCLIタスクマネージャー。
 
 > **本プロジェクトは開発中です。** 機能やCLIインターフェースは予告なく変更される場合があります。
 
+![DEMO](../images/demo-list-all.png)
+
 ## 目次
 
 - [インストール](#インストール)
@@ -89,6 +91,8 @@ my-task list --all           # 完了・クローズ済みも表示
 my-task list -P my-app       # プロジェクトで絞り込み
 my-task list --sort due      # ソート: id, due, project, created
 ```
+
+![DEMO](../images/demo-list.png)
 
 ### タスクのステータス
 
