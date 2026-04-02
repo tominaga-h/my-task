@@ -1,0 +1,24 @@
+{
+  "name": "my-task",
+  "owner": {
+    "name": "tominaga-h"
+  },
+  "metadata": {
+    "description": "my-task プラグイン。タスク管理から開発サイクルまでを行う。"
+  },
+  "plugins": [
+    {
+      "name": "my-task",
+      "source": "./cc-plugin",
+      "description": "my-task スキル。タスク管理から開発サイクルまでを行う。",
+      "version": "1.0.0",
+      "author": {
+        "name": "tominaga-h"
+      },
+      "repository": "https://github.com/tominaga-h/my-task",
+      "license": "MIT",
+      "category": "command-line-utilities",
+      "tags": ["task", "todo", "development", "productivity"]
+    }
+  ]
+}
