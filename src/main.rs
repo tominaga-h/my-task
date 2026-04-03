@@ -17,6 +17,8 @@ struct Cli {
 enum Commands {
     /// Add a new task
     Add(commands::add::AddArgs),
+    /// Close a task
+    Close(commands::close::CloseArgs),
     /// Mark a task as done
     Done(commands::done::DoneArgs),
     /// Edit a task
@@ -30,6 +32,7 @@ fn main() {
     let cli = Cli::parse();
     match cli.command {
         Commands::Add(args) => commands::add::run(args),
+        Commands::Close(args) => commands::close::run(args),
         Commands::Done(args) => commands::done::run(args),
         Commands::Edit(args) => commands::edit::run(args),
         Commands::List(args) => commands::list::run(args),
