@@ -7,8 +7,9 @@ use crate::model::Status;
 
 #[derive(Args)]
 pub struct DoneArgs {
-    /// Task ID to mark as done
-    pub id: u32,
+    /// Task IDs to mark as done
+    #[arg(required = true, num_args = 1..)]
+    pub ids: Vec<u32>,
 }
 
 pub fn run(args: DoneArgs) {
@@ -21,28 +22,40 @@ pub fn run(args: DoneArgs) {
         }
     };
 
-    let task = match db::find_task(&conn, args.id) {
-        Ok(Some(t)) => t,
-        Ok(None) => {
-            eprintln!("Error: task #{} not found", args.id);
-            std::process::exit(1);
-        }
-        Err(_) => {
-            eprintln!("Error: failed to read database: {}", db_path.display());
-            std::process::exit(1);
-        }
-    };
-
-    if task.status == Status::Done {
-        eprintln!("Error: task #{} is already done", args.id);
-        std::process::exit(1);
-    }
-
     let today = Local::now().date_naive();
-    if db::complete_task(&conn, args.id, today).is_err() {
-        eprintln!("Error: failed to write database: {}", db_path.display());
-        std::process::exit(1);
+    let mut has_error = false;
+
+    for id in &args.ids {
+        let task = match db::find_task(&conn, *id) {
+            Ok(Some(t)) => t,
+            Ok(None) => {
+                eprintln!("Error: task #{} not found", id);
+                has_error = true;
+                continue;
+            }
+            Err(_) => {
+                eprintln!("Error: failed to read database: {}", db_path.display());
+                has_error = true;
+                continue;
+            }
+        };
+
+        if task.status == Status::Done {
+            eprintln!("Error: task #{} is already done", id);
+            has_error = true;
+            continue;
+        }
+
+        if db::complete_task(&conn, *id, today).is_err() {
+            eprintln!("Error: failed to write database: {}", db_path.display());
+            has_error = true;
+            continue;
+        }
+
+        println!("Done: #{} {}", task.id, task.title);
     }
 
-    println!("Done: #{} {}", task.id, task.title);
+    if has_error {
+        std::process::exit(1);
+    }
 }
