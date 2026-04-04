@@ -1,4 +1,4 @@
-use crate::model::{SortKey, Status, Task};
+use crate::model::{SortKey, SortOrder, Status, Task};
 use chrono::NaiveDate;
 use rusqlite::{params, Connection};
 use std::fs;
@@ -107,6 +107,7 @@ pub fn list_tasks(
     all: bool,
     project: Option<&str>,
     sort: SortKey,
+    order: SortOrder,
 ) -> Result<Vec<Task>, rusqlite::Error> {
     let base =
         "SELECT id, title, status, source, project, due, done_at, created, updated FROM tasks";
@@ -122,7 +123,13 @@ pub fn list_tasks(
     } else {
         format!(" WHERE {}", conditions.join(" AND "))
     };
-    let sql = format!("{}{} ORDER BY {}", base, where_clause, sort.as_sql());
+    let sql = format!(
+        "{}{} ORDER BY {} {}",
+        base,
+        where_clause,
+        sort.as_sql(),
+        order.as_sql()
+    );
 
     let mut stmt = conn.prepare(&sql)?;
     let tasks: Vec<Task> = if let Some(p) = project {

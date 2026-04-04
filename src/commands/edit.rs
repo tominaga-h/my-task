@@ -6,7 +6,7 @@ use std::io::{Read, Write};
 use crate::config;
 use crate::date_parser;
 use crate::db;
-use crate::model::{SortKey, Task};
+use crate::model::{SortKey, SortOrder, Task};
 
 #[derive(Args)]
 pub struct EditArgs {
@@ -140,7 +140,13 @@ fn run_interactive(id: Option<u32>, filter_project: Option<String>) {
             }
         }
     } else {
-        match db::list_tasks(&conn, false, filter_project.as_deref(), SortKey::Id) {
+        match db::list_tasks(
+            &conn,
+            false,
+            filter_project.as_deref(),
+            SortKey::Id,
+            SortOrder::default(),
+        ) {
             Ok(t) => t,
             Err(_) => {
                 eprintln!("Error: failed to read database: {}", db_path.display());

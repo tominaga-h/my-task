@@ -6,7 +6,7 @@ use comfy_table::{Attribute, Cell, CellAlignment, Color, ContentArrangement, Tab
 
 use crate::config;
 use crate::db;
-use crate::model::{SortKey, Status};
+use crate::model::{SortKey, SortOrder, Status};
 
 #[derive(Args)]
 pub struct ListArgs {
@@ -21,6 +21,14 @@ pub struct ListArgs {
     /// Sort by: id, due, project, created
     #[arg(short, long, default_value = "id")]
     pub sort: String,
+
+    /// Sort ascending
+    #[arg(long, conflicts_with = "desc")]
+    pub asc: bool,
+
+    /// Sort descending
+    #[arg(long, conflicts_with = "asc")]
+    pub desc: bool,
 }
 
 pub fn run(args: ListArgs) {
@@ -47,7 +55,13 @@ pub fn run(args: ListArgs) {
         }
     };
 
-    let tasks = match db::list_tasks(&conn, args.all, args.project.as_deref(), sort) {
+    let order = if args.desc {
+        SortOrder::Desc
+    } else {
+        SortOrder::Asc
+    };
+
+    let tasks = match db::list_tasks(&conn, args.all, args.project.as_deref(), sort, order) {
         Ok(t) => t,
         Err(_) => {
             eprintln!("Error: failed to read database: {}", db_path.display());
