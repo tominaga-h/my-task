@@ -268,3 +268,51 @@ fn test_ls_alias() {
     assert!(stdout.contains("Alias test"));
     assert!(stdout.contains("1 tasks"));
 }
+
+#[test]
+fn test_list_no_panic_in_pipe() {
+    // When running in a pipe (no TTY), terminal_size() returns None.
+    // The command should still work without panicking by using a default width.
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args([
+            "add",
+            "Task with a fairly long title for testing width handling",
+        ])
+        .assert()
+        .success();
+    cmd(&db_path)
+        .args(["add", "Short", "--project", "proj"])
+        .assert()
+        .success();
+
+    // assert_cmd captures stdout via pipe, so terminal_size() returns None (default 80)
+    cmd(&db_path)
+        .args(["list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Task with a fairly long title"))
+        .stdout(predicate::str::contains("Short"));
+}
+
+#[test]
+fn test_list_many_tasks_no_panic() {
+    // Ensure table rendering doesn't panic even with many rows
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    for i in 1..=20 {
+        cmd(&db_path)
+            .args(["add", &format!("Task number {}", i)])
+            .assert()
+            .success();
+    }
+
+    cmd(&db_path)
+        .args(["list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("20 tasks"));
+}
