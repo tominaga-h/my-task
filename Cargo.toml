@@ -1,6 +1,6 @@
 [package]
 name = "my_task"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2021"
 authors = ["tominaga-h"]
 description = "A simple CLI task manager powered by SQLite"
