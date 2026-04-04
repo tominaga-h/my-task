@@ -42,6 +42,22 @@ impl SortKey {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub enum SortOrder {
+    #[default]
+    Asc,
+    Desc,
+}
+
+impl SortOrder {
+    pub fn as_sql(&self) -> &str {
+        match self {
+            SortOrder::Asc => "ASC",
+            SortOrder::Desc => "DESC",
+        }
+    }
+}
+
 impl Status {
     #[allow(dead_code)]
     pub fn as_str(&self) -> &str {

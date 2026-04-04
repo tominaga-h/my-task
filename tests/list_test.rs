@@ -178,6 +178,84 @@ fn test_list_sort_invalid() {
 }
 
 #[test]
+fn test_list_sort_asc() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path).args(["add", "First"]).assert().success();
+    cmd(&db_path).args(["add", "Second"]).assert().success();
+    cmd(&db_path).args(["add", "Third"]).assert().success();
+
+    let output = cmd(&db_path)
+        .args(["list", "--sort", "id", "--asc"])
+        .assert()
+        .success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+
+    let pos_first = stdout.find("First").unwrap();
+    let pos_third = stdout.find("Third").unwrap();
+    assert!(
+        pos_first < pos_third,
+        "First should appear before Third in ascending order"
+    );
+}
+
+#[test]
+fn test_list_sort_desc() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path).args(["add", "First"]).assert().success();
+    cmd(&db_path).args(["add", "Second"]).assert().success();
+    cmd(&db_path).args(["add", "Third"]).assert().success();
+
+    let output = cmd(&db_path)
+        .args(["list", "--sort", "id", "--desc"])
+        .assert()
+        .success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+
+    let pos_first = stdout.find("First").unwrap();
+    let pos_third = stdout.find("Third").unwrap();
+    assert!(
+        pos_third < pos_first,
+        "Third should appear before First in descending order"
+    );
+}
+
+#[test]
+fn test_list_sort_asc_desc_conflict() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["list", "--asc", "--desc"])
+        .assert()
+        .failure();
+}
+
+#[test]
+fn test_list_sort_default_order() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path).args(["add", "First"]).assert().success();
+    cmd(&db_path).args(["add", "Second"]).assert().success();
+    cmd(&db_path).args(["add", "Third"]).assert().success();
+
+    // Default (no --asc/--desc) should be ascending
+    let output = cmd(&db_path)
+        .args(["list", "--sort", "id"])
+        .assert()
+        .success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+
+    let pos_first = stdout.find("First").unwrap();
+    let pos_third = stdout.find("Third").unwrap();
+    assert!(pos_first < pos_third, "Default order should be ascending");
+}
+
+#[test]
 fn test_ls_alias() {
     let tmp = TempDir::new().unwrap();
     let db_path = tmp.path().join("tasks.db");
