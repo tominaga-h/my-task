@@ -1,11 +1,42 @@
 # CLAUDE.md
 
-## タスク管理
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-- 実装タスクは `TODO.md` に難易度順で管理する
-- 難易度が低いものから順に実装する
-- 各タスクの作業は `feature/xxxx` ブランチで行い、完了後に develop へマージする
-- 実装完了したタスクは `TODO.md` から削除すること
+## プロジェクト概要
+
+SQLite ベースの CLI タスク管理ツール（Rust）。バイナリ名は `my-task`。
+DBファイルは環境変数 `MY_TASK_DATA_FILE` またはデフォルトで `$XDG_DATA_HOME/my-task/tasks.db`。
+使い方の詳細は `README.md` を参照。
+
+## よく使うコマンド
+
+```bash
+cargo build                        # ビルド
+cargo test --all-targets           # 全テスト実行
+cargo test <テスト名>               # 単一テスト実行
+cargo fmt --all                    # フォーマット
+cargo clippy --all-targets -- -D warnings  # リント
+make check                         # fmt(--fix) + check + clippy + test を一括実行
+make release                       # リリースビルド
+```
+
+pre-push フックが `githooks/pre-push.sh` にあり、`make install-hooks` でインストールできる。
+
+## アーキテクチャ
+
+```
+src/
+  main.rs        — CLIエントリポイント（clap derive でサブコマンド定義）
+  commands/      — 各サブコマンドの実装（add, close, done, edit, list, notify）
+  db.rs          — SQLite操作層（rusqlite, スキーマ定義・マイグレーション含む）
+  model.rs       — Task構造体, Status/SortKey/SortOrder enum
+  config.rs      — DBパス解決
+  date_parser.rs — ファジー日付パーサー（日本語/英語対応: 今日, 明日, 曜日名など）
+tests/
+  <コマンド名>_test.rs — インテグレーションテスト（assert_cmd でバイナリ実行）
+```
+
+コマンド追加時は: `commands/` にモジュール追加 → `commands/mod.rs` に pub mod → `main.rs` の `Commands` enum と `match` に追加。
 
 ## ブランチ運用
 
