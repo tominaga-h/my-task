@@ -13,6 +13,7 @@ pub struct Task {
     pub done_at: Option<NaiveDate>,
     #[allow(dead_code)]
     pub updated: NaiveDate,
+    pub reminds: Vec<NaiveDate>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

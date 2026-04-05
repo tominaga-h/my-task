@@ -331,6 +331,60 @@ fn test_list_no_panic_in_pipe() {
 }
 
 #[test]
+fn test_list_shows_remind_column() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["add", "Remind task", "--remind", "2026-04-10"])
+        .assert()
+        .success();
+
+    let output = cmd(&db_path).args(["list"]).assert().success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+
+    assert!(stdout.contains("Remind"));
+    assert!(stdout.contains("4/10"));
+}
+
+#[test]
+fn test_list_shows_multiple_reminds() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["add", "Multi remind", "--remind", "2026-04-10"])
+        .assert()
+        .success();
+
+    cmd(&db_path)
+        .args(["edit", "1", "--remind", "2026-04-15"])
+        .assert()
+        .success();
+
+    let output = cmd(&db_path).args(["list"]).assert().success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+
+    assert!(stdout.contains("4/10"));
+    assert!(stdout.contains("4/15"));
+}
+
+#[test]
+fn test_list_no_remind_empty() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path).args(["add", "No remind"]).assert().success();
+
+    let output = cmd(&db_path).args(["list"]).assert().success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+
+    // Remind header should be present, but no remind data for this task
+    assert!(stdout.contains("Remind"));
+    assert!(stdout.contains("No remind"));
+}
+
+#[test]
 fn test_list_many_tasks_no_panic() {
     // Ensure table rendering doesn't panic even with many rows
     let tmp = TempDir::new().unwrap();

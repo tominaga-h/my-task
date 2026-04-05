@@ -126,6 +126,87 @@ fn test_edit_empty_title() {
 }
 
 #[test]
+fn test_edit_add_remind() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path).args(["add", "Task"]).assert().success();
+
+    cmd(&db_path)
+        .args(["edit", "1", "--remind", "2026-04-10"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Updated: #1"));
+
+    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    let remind: String = conn
+        .query_row(
+            "SELECT remind_at FROM task_reminds WHERE task_id = 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(remind, "2026-04-10");
+}
+
+#[test]
+fn test_edit_add_multiple_reminds() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path).args(["add", "Task"]).assert().success();
+
+    cmd(&db_path)
+        .args(["edit", "1", "--remind", "2026-04-10"])
+        .assert()
+        .success();
+
+    cmd(&db_path)
+        .args(["edit", "1", "--remind", "2026-04-15"])
+        .assert()
+        .success();
+
+    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    let count: i64 = conn
+        .query_row(
+            "SELECT count(*) FROM task_reminds WHERE task_id = 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(count, 2);
+}
+
+#[test]
+fn test_edit_remind_only() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path).args(["add", "Task"]).assert().success();
+
+    // Should succeed with only --remind (no --title, --project, --due)
+    cmd(&db_path)
+        .args(["edit", "1", "--remind", "2026-04-10"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Updated: #1"));
+}
+
+#[test]
+fn test_edit_remind_short_flag() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path).args(["add", "Task"]).assert().success();
+
+    cmd(&db_path)
+        .args(["edit", "1", "-r", "2026-04-10"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Updated: #1"));
+}
+
+#[test]
 fn test_edit_no_flags() {
     let tmp = TempDir::new().unwrap();
     let db_path = tmp.path().join("tasks.db");
