@@ -26,6 +26,8 @@ enum Commands {
     /// List tasks
     #[command(alias = "ls")]
     List(commands::list::ListArgs),
+    /// Show overdue and due-soon tasks
+    Notify(commands::notify::NotifyArgs),
 }
 
 fn main() {
@@ -36,5 +38,6 @@ fn main() {
         Commands::Done(args) => commands::done::run(args),
         Commands::Edit(args) => commands::edit::run(args),
         Commands::List(args) => commands::list::run(args),
+        Commands::Notify(args) => commands::notify::run(args),
     }
 }

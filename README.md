@@ -18,6 +18,7 @@ A simple CLI task manager powered by SQLite.
   - [Edit a task](#edit-a-task)
   - [List tasks](#list-tasks)
   - [Task statuses](#task-statuses)
+  - [Notify due tasks](#notify-due-tasks)
 - [Data storage](#data-storage)
 - [Claude Code Plugin](#claude-code-plugin)
 - [License](#license)
@@ -102,6 +103,16 @@ my-task list --sort due      # Sort by: id, due, project, created
 | **Done** | Completed via `done` command |
 | **Closed** | Closed by deleting block in `edit -i` |
 
+### Notify due tasks
+
+```bash
+my-task notify              # Overdue + due today
+my-task notify --days 3     # Include tasks due within 3 days
+```
+
+Shows overdue and upcoming tasks on stdout. Designed for use with cron / launchd.
+Silent (no output) when there are no matching tasks.
+
 ## Data storage
 
 Task data is stored in a SQLite database at:
@@ -185,6 +196,17 @@ Opens `$EDITOR` (fallback: `vi`) with tasks in YAML format.
 - Only changed tasks are updated. Unchanged tasks are skipped.
 - Output: `Updated N tasks`, `Closed N tasks`, or `No changes`
 - `-i` cannot be combined with `--title`, `--project`, or `--due`.
+
+### `my-task notify [OPTIONS]`
+
+Show overdue and due-soon tasks on stdout.
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--days <N>` | `-D` | `0` | Include tasks due within N days from today (0 = today + overdue only) |
+
+- Outputs nothing and exits with code `0` when no tasks match (silent mode).
+- Overdue tasks show days past due; today's tasks show "today"; future tasks show days remaining.
 
 ### `my-task list [OPTIONS]`
 
