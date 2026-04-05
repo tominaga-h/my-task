@@ -1,5 +1,9 @@
 use chrono::{Datelike, Days, Local};
 use clap::Args;
+use comfy_table::modifiers::UTF8_SOLID_INNER_BORDERS;
+use comfy_table::presets::UTF8_FULL;
+use comfy_table::{Attribute, Cell, CellAlignment, Color, ContentArrangement, Table};
+use terminal_size::{terminal_size, Width};
 
 use crate::config;
 use crate::db;
@@ -38,23 +42,58 @@ pub fn run(args: NotifyArgs) {
         return;
     }
 
-    println!("期限切れタスクがあります");
+    let term_width = terminal_size().map(|(Width(w), _)| w).unwrap_or(80);
+
+    let mut table = Table::new();
+    table
+        .load_preset(UTF8_FULL)
+        .apply_modifier(UTF8_SOLID_INNER_BORDERS)
+        .set_content_arrangement(ContentArrangement::Dynamic)
+        .set_width(term_width);
+
+    table.set_header(vec![
+        Cell::new("ID").add_attribute(Attribute::Bold),
+        Cell::new("Title").add_attribute(Attribute::Bold),
+        Cell::new("Due").add_attribute(Attribute::Bold),
+        Cell::new("Status").add_attribute(Attribute::Bold),
+    ]);
+
     for task in &tasks {
         let due = task.due.expect("due should exist for notified tasks");
         let due_label = format!("{}/{}", due.month(), due.day());
         let diff = (due - today).num_days();
 
-        let detail = if diff < 0 {
-            format!("\x1b[31m{}日超過\x1b[0m", -diff)
+        let (status_text, status_color) = if diff < 0 {
+            (format!("{}日超過", -diff), Color::Red)
         } else if diff == 0 {
-            "\x1b[33m今日\x1b[0m".to_string()
+            ("今日".to_string(), Color::Yellow)
         } else {
-            format!("あと{}日", diff)
+            (format!("あと{}日", diff), Color::Green)
         };
 
-        println!(
-            "  #{} {}（期限: {} - {}）",
-            task.id, task.title, due_label, detail
-        );
+        let id_cell = Cell::new(format!("#{}", task.id)).fg(Color::Cyan);
+        let title_cell = if diff < 0 {
+            Cell::new(&task.title).fg(Color::Red)
+        } else {
+            Cell::new(&task.title)
+        };
+        let due_cell = if diff < 0 {
+            Cell::new(&due_label).fg(Color::Red)
+        } else if diff == 0 {
+            Cell::new(&due_label).fg(Color::Yellow)
+        } else {
+            Cell::new(&due_label).fg(Color::Green)
+        };
+        let status_cell = Cell::new(&status_text).fg(status_color);
+
+        table.add_row(vec![id_cell, title_cell, due_cell, status_cell]);
     }
+
+    let id_col = table.column_mut(0).expect("id column");
+    id_col.set_cell_alignment(CellAlignment::Right);
+
+    println!("期限切れタスクがあります");
+    println!("{table}");
+    println!();
+    println!("{} tasks", tasks.len());
 }
