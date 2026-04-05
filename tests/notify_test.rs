@@ -27,11 +27,17 @@ fn setup_db(db_path: &std::path::Path) -> rusqlite::Connection {
     conn
 }
 
-fn insert_task(conn: &rusqlite::Connection, title: &str, due: Option<&str>, status: &str) {
+fn insert_task(
+    conn: &rusqlite::Connection,
+    title: &str,
+    due: Option<&str>,
+    status: &str,
+    project: Option<&str>,
+) {
     conn.execute(
-        "INSERT INTO tasks (title, status, source, due, created, updated)
-         VALUES (?1, ?2, 'private', ?3, '2026-03-01', '2026-03-01')",
-        rusqlite::params![title, status, due],
+        "INSERT INTO tasks (title, status, source, project, due, created, updated)
+         VALUES (?1, ?2, 'private', ?3, ?4, '2026-03-01', '2026-03-01')",
+        rusqlite::params![title, status, project, due],
     )
     .unwrap();
 }
@@ -73,8 +79,8 @@ fn test_notify_no_due_tasks_silent() {
     let db_path = tmp.path().join("tasks.db");
     let conn = setup_db(&db_path);
 
-    insert_task(&conn, "No due date", None, "open");
-    insert_task(&conn, "Future task", Some(&days_later(30)), "open");
+    insert_task(&conn, "No due date", None, "open", None);
+    insert_task(&conn, "Future task", Some(&days_later(30)), "open", None);
 
     cmd(&db_path)
         .args(["notify"])
@@ -89,7 +95,7 @@ fn test_notify_overdue_task() {
     let db_path = tmp.path().join("tasks.db");
     let conn = setup_db(&db_path);
 
-    insert_task(&conn, "Overdue report", Some(&days_ago(3)), "open");
+    insert_task(&conn, "Overdue report", Some(&days_ago(3)), "open", None);
 
     let output = cmd(&db_path).args(["notify"]).assert().success();
     let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
@@ -105,7 +111,7 @@ fn test_notify_due_today() {
     let db_path = tmp.path().join("tasks.db");
     let conn = setup_db(&db_path);
 
-    insert_task(&conn, "Due today task", Some(&today_str()), "open");
+    insert_task(&conn, "Due today task", Some(&today_str()), "open", None);
 
     let output = cmd(&db_path).args(["notify"]).assert().success();
     let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
@@ -121,8 +127,8 @@ fn test_notify_days_option() {
     let db_path = tmp.path().join("tasks.db");
     let conn = setup_db(&db_path);
 
-    insert_task(&conn, "Due in 2 days", Some(&days_later(2)), "open");
-    insert_task(&conn, "Due in 5 days", Some(&days_later(5)), "open");
+    insert_task(&conn, "Due in 2 days", Some(&days_later(2)), "open", None);
+    insert_task(&conn, "Due in 5 days", Some(&days_later(5)), "open", None);
 
     cmd(&db_path)
         .args(["notify"])
@@ -147,9 +153,9 @@ fn test_notify_excludes_done_and_closed() {
     let db_path = tmp.path().join("tasks.db");
     let conn = setup_db(&db_path);
 
-    insert_task(&conn, "Done task", Some(&today_str()), "done");
-    insert_task(&conn, "Closed task", Some(&today_str()), "closed");
-    insert_task(&conn, "Open task", Some(&today_str()), "open");
+    insert_task(&conn, "Done task", Some(&today_str()), "done", None);
+    insert_task(&conn, "Closed task", Some(&today_str()), "closed", None);
+    insert_task(&conn, "Open task", Some(&today_str()), "open", None);
 
     let output = cmd(&db_path).args(["notify"]).assert().success();
     let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
@@ -157,4 +163,59 @@ fn test_notify_excludes_done_and_closed() {
     assert!(stdout.contains("Open task"));
     assert!(!stdout.contains("Done task"));
     assert!(!stdout.contains("Closed task"));
+}
+
+#[test]
+fn test_notify_shows_project_column() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+    let conn = setup_db(&db_path);
+
+    insert_task(
+        &conn,
+        "Project task",
+        Some(&today_str()),
+        "open",
+        Some("my-task"),
+    );
+
+    let output = cmd(&db_path).args(["notify"]).assert().success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+
+    assert!(stdout.contains("Project"));
+    assert!(stdout.contains("my-task"));
+    assert!(stdout.contains("Project task"));
+}
+
+#[test]
+fn test_notify_days_short_flag() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+    let conn = setup_db(&db_path);
+
+    insert_task(&conn, "Due in 2 days", Some(&days_later(2)), "open", None);
+
+    // -d 3 should include a task due in 2 days
+    let output = cmd(&db_path).args(["notify", "-d", "3"]).assert().success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+
+    assert!(stdout.contains("Due in 2 days"));
+    assert!(stdout.contains("あと2日"));
+}
+
+#[test]
+fn test_notify_mixed_projects() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+    let conn = setup_db(&db_path);
+
+    insert_task(&conn, "API task", Some(&today_str()), "open", Some("api"));
+    insert_task(&conn, "No project task", Some(&days_ago(1)), "open", None);
+
+    let output = cmd(&db_path).args(["notify"]).assert().success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+
+    assert!(stdout.contains("api"));
+    assert!(stdout.contains("API task"));
+    assert!(stdout.contains("No project task"));
 }

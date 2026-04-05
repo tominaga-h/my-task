@@ -11,7 +11,7 @@ use crate::db;
 #[derive(Args)]
 pub struct NotifyArgs {
     /// Include tasks due within N days from today (0 = today + overdue only)
-    #[arg(short = 'D', long, default_value = "0")]
+    #[arg(short = 'd', long, default_value = "0")]
     pub days: u32,
 }
 
@@ -53,6 +53,7 @@ pub fn run(args: NotifyArgs) {
 
     table.set_header(vec![
         Cell::new("ID").add_attribute(Attribute::Bold),
+        Cell::new("Project").add_attribute(Attribute::Bold),
         Cell::new("Title").add_attribute(Attribute::Bold),
         Cell::new("Due").add_attribute(Attribute::Bold),
         Cell::new("Status").add_attribute(Attribute::Bold),
@@ -72,6 +73,8 @@ pub fn run(args: NotifyArgs) {
         };
 
         let id_cell = Cell::new(format!("#{}", task.id)).fg(Color::Cyan);
+        let project_text = task.project.as_deref().unwrap_or_default();
+        let project_cell = Cell::new(project_text);
         let title_cell = if diff < 0 {
             Cell::new(&task.title).fg(Color::Red)
         } else {
@@ -86,7 +89,13 @@ pub fn run(args: NotifyArgs) {
         };
         let status_cell = Cell::new(&status_text).fg(status_color);
 
-        table.add_row(vec![id_cell, title_cell, due_cell, status_cell]);
+        table.add_row(vec![
+            id_cell,
+            project_cell,
+            title_cell,
+            due_cell,
+            status_cell,
+        ]);
     }
 
     let id_col = table.column_mut(0).expect("id column");
