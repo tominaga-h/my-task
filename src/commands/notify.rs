@@ -11,7 +11,7 @@ use crate::db;
 #[derive(Args)]
 pub struct NotifyArgs {
     /// Include tasks due within N days from today (0 = today + overdue only)
-    #[arg(short = 'D', long, default_value = "0")]
+    #[arg(short = 'd', long, default_value = "0")]
     pub days: u32,
 }
 

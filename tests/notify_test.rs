@@ -188,6 +188,22 @@ fn test_notify_shows_project_column() {
 }
 
 #[test]
+fn test_notify_days_short_flag() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+    let conn = setup_db(&db_path);
+
+    insert_task(&conn, "Due in 2 days", Some(&days_later(2)), "open", None);
+
+    // -d 3 should include a task due in 2 days
+    let output = cmd(&db_path).args(["notify", "-d", "3"]).assert().success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+
+    assert!(stdout.contains("Due in 2 days"));
+    assert!(stdout.contains("あと2日"));
+}
+
+#[test]
 fn test_notify_mixed_projects() {
     let tmp = TempDir::new().unwrap();
     let db_path = tmp.path().join("tasks.db");
