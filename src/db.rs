@@ -23,6 +23,13 @@ pub fn open(path: &Path) -> Result<Connection, rusqlite::Error> {
             updated TEXT    NOT NULL
         );",
     )?;
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS task_reminds (
+            id       INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id  INTEGER NOT NULL REFERENCES tasks(id),
+            remind_at TEXT NOT NULL
+        );",
+    )?;
     // Migrate: add 'closed' to CHECK constraint for existing databases
     migrate_status_check(&conn)?;
     Ok(conn)
@@ -211,6 +218,60 @@ pub fn get_due_tasks(
     Ok(tasks)
 }
 
+pub fn add_remind(
+    conn: &Connection,
+    task_id: u32,
+    remind_at: NaiveDate,
+) -> Result<(), rusqlite::Error> {
+    let remind_str = remind_at.to_string();
+    conn.execute(
+        "INSERT INTO task_reminds (task_id, remind_at) VALUES (?1, ?2)",
+        params![task_id, remind_str],
+    )?;
+    Ok(())
+}
+
+pub fn get_reminds_for_task(
+    conn: &Connection,
+    task_id: u32,
+) -> Result<Vec<NaiveDate>, rusqlite::Error> {
+    let mut stmt = conn
+        .prepare("SELECT remind_at FROM task_reminds WHERE task_id = ?1 ORDER BY remind_at ASC")?;
+    let reminds = stmt
+        .query_map(params![task_id], |row| {
+            let s: String = row.get(0)?;
+            Ok(parse_date(&s))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(reminds)
+}
+
+pub fn get_tasks_with_remind_today(
+    conn: &Connection,
+    today: NaiveDate,
+) -> Result<Vec<Task>, rusqlite::Error> {
+    let today_str = today.to_string();
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT t.id, t.title, t.status, t.source, t.project, t.due, t.done_at, t.created, t.updated
+         FROM tasks t
+         JOIN task_reminds r ON t.id = r.task_id
+         WHERE t.status = 'open' AND r.remind_at = ?1
+         ORDER BY t.id ASC",
+    )?;
+    let tasks = stmt
+        .query_map(params![today_str], row_to_task)?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(tasks)
+}
+
+pub fn delete_reminds_for_task(conn: &Connection, task_id: u32) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "DELETE FROM task_reminds WHERE task_id = ?1",
+        params![task_id],
+    )?;
+    Ok(())
+}
+
 fn parse_date(s: &str) -> NaiveDate {
     NaiveDate::parse_from_str(s, "%Y-%m-%d").expect("invalid date in database")
 }
@@ -236,6 +297,7 @@ fn row_to_task(row: &rusqlite::Row) -> Result<Task, rusqlite::Error> {
         done_at: done_at_str.map(|s| parse_date(&s)),
         created: parse_date(&created_str),
         updated: parse_date(&updated_str),
+        reminds: Vec::new(),
     })
 }
 
@@ -257,6 +319,11 @@ mod tests {
                 done_at TEXT,
                 created TEXT    NOT NULL,
                 updated TEXT    NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS task_reminds (
+                id       INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id  INTEGER NOT NULL REFERENCES tasks(id),
+                remind_at TEXT NOT NULL
             );",
         )?;
         Ok(conn)
@@ -380,5 +447,85 @@ mod tests {
 
         let tasks = get_due_tasks(&conn, t).unwrap();
         assert!(tasks.is_empty());
+    }
+
+    #[test]
+    fn test_add_and_get_reminds() {
+        let conn = open_in_memory().unwrap();
+        let t = today();
+        let id = add_task(&conn, "Remind me", None, None, t).unwrap();
+
+        let r1 = NaiveDate::from_ymd_opt(2026, 4, 10).unwrap();
+        let r2 = NaiveDate::from_ymd_opt(2026, 4, 15).unwrap();
+        add_remind(&conn, id, r1).unwrap();
+        add_remind(&conn, id, r2).unwrap();
+
+        let reminds = get_reminds_for_task(&conn, id).unwrap();
+        assert_eq!(reminds.len(), 2);
+        assert_eq!(reminds[0], r1);
+        assert_eq!(reminds[1], r2);
+    }
+
+    #[test]
+    fn test_get_reminds_empty() {
+        let conn = open_in_memory().unwrap();
+        let t = today();
+        let id = add_task(&conn, "No remind", None, None, t).unwrap();
+
+        let reminds = get_reminds_for_task(&conn, id).unwrap();
+        assert!(reminds.is_empty());
+    }
+
+    #[test]
+    fn test_get_tasks_with_remind_today() {
+        let conn = open_in_memory().unwrap();
+        let t = today();
+
+        let id1 = add_task(&conn, "Remind today", None, None, t).unwrap();
+        add_remind(&conn, id1, t).unwrap();
+
+        let tomorrow = NaiveDate::from_ymd_opt(2026, 4, 1).unwrap();
+        let id2 = add_task(&conn, "Remind tomorrow", None, None, t).unwrap();
+        add_remind(&conn, id2, tomorrow).unwrap();
+
+        let id3 = add_task(&conn, "No remind", None, None, t).unwrap();
+        let _ = id3;
+
+        let tasks = get_tasks_with_remind_today(&conn, t).unwrap();
+        assert_eq!(tasks.len(), 1);
+        assert_eq!(tasks[0].title, "Remind today");
+    }
+
+    #[test]
+    fn test_get_tasks_with_remind_today_excludes_done() {
+        let conn = open_in_memory().unwrap();
+        let t = today();
+
+        let id1 = add_task(&conn, "Done task", None, None, t).unwrap();
+        add_remind(&conn, id1, t).unwrap();
+        complete_task(&conn, id1, t).unwrap();
+
+        let id2 = add_task(&conn, "Closed task", None, None, t).unwrap();
+        add_remind(&conn, id2, t).unwrap();
+        close_task(&conn, id2, t).unwrap();
+
+        let id3 = add_task(&conn, "Open task", None, None, t).unwrap();
+        add_remind(&conn, id3, t).unwrap();
+
+        let tasks = get_tasks_with_remind_today(&conn, t).unwrap();
+        assert_eq!(tasks.len(), 1);
+        assert_eq!(tasks[0].title, "Open task");
+    }
+
+    #[test]
+    fn test_delete_reminds_for_task() {
+        let conn = open_in_memory().unwrap();
+        let t = today();
+        let id = add_task(&conn, "Task", None, None, t).unwrap();
+        add_remind(&conn, id, t).unwrap();
+
+        delete_reminds_for_task(&conn, id).unwrap();
+        let reminds = get_reminds_for_task(&conn, id).unwrap();
+        assert!(reminds.is_empty());
     }
 }

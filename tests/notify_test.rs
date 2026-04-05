@@ -21,6 +21,11 @@ fn setup_db(db_path: &std::path::Path) -> rusqlite::Connection {
             done_at TEXT,
             created TEXT    NOT NULL,
             updated TEXT    NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS task_reminds (
+            id       INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id  INTEGER NOT NULL REFERENCES tasks(id),
+            remind_at TEXT NOT NULL
         );",
     )
     .unwrap();
@@ -38,6 +43,14 @@ fn insert_task(
         "INSERT INTO tasks (title, status, source, project, due, created, updated)
          VALUES (?1, ?2, 'private', ?3, ?4, '2026-03-01', '2026-03-01')",
         rusqlite::params![title, status, project, due],
+    )
+    .unwrap();
+}
+
+fn insert_remind(conn: &rusqlite::Connection, task_id: u32, remind_at: &str) {
+    conn.execute(
+        "INSERT INTO task_reminds (task_id, remind_at) VALUES (?1, ?2)",
+        rusqlite::params![task_id, remind_at],
     )
     .unwrap();
 }
@@ -218,4 +231,90 @@ fn test_notify_mixed_projects() {
     assert!(stdout.contains("api"));
     assert!(stdout.contains("API task"));
     assert!(stdout.contains("No project task"));
+}
+
+#[test]
+fn test_notify_remind_today() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+    let conn = setup_db(&db_path);
+
+    insert_task(&conn, "Remind me task", None, "open", Some("proj"));
+    insert_remind(&conn, 1, &today_str());
+
+    let output = cmd(&db_path).args(["notify"]).assert().success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+
+    assert!(stdout.contains("リマインドタスクがあります"));
+    assert!(stdout.contains("Remind me task"));
+    assert!(stdout.contains("proj"));
+}
+
+#[test]
+fn test_notify_remind_tomorrow_no_output() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+    let conn = setup_db(&db_path);
+
+    insert_task(&conn, "Remind tomorrow", None, "open", None);
+    insert_remind(&conn, 1, &days_later(1));
+
+    cmd(&db_path)
+        .args(["notify"])
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty());
+}
+
+#[test]
+fn test_notify_remind_excludes_done() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+    let conn = setup_db(&db_path);
+
+    insert_task(&conn, "Done remind", None, "done", None);
+    insert_remind(&conn, 1, &today_str());
+
+    cmd(&db_path)
+        .args(["notify"])
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty());
+}
+
+#[test]
+fn test_notify_remind_excludes_closed() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+    let conn = setup_db(&db_path);
+
+    insert_task(&conn, "Closed remind", None, "closed", None);
+    insert_remind(&conn, 1, &today_str());
+
+    cmd(&db_path)
+        .args(["notify"])
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty());
+}
+
+#[test]
+fn test_notify_both_due_and_remind() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+    let conn = setup_db(&db_path);
+
+    // Due task
+    insert_task(&conn, "Due task", Some(&today_str()), "open", None);
+    // Remind task (different task)
+    insert_task(&conn, "Remind task", None, "open", None);
+    insert_remind(&conn, 2, &today_str());
+
+    let output = cmd(&db_path).args(["notify"]).assert().success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+
+    assert!(stdout.contains("期限切れタスクがあります"));
+    assert!(stdout.contains("Due task"));
+    assert!(stdout.contains("リマインドタスクがあります"));
+    assert!(stdout.contains("Remind task"));
 }
