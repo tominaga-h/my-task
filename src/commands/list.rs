@@ -3,10 +3,13 @@ use clap::Args;
 use comfy_table::modifiers::UTF8_SOLID_INNER_BORDERS;
 use comfy_table::presets::UTF8_FULL;
 use comfy_table::{Attribute, Cell, CellAlignment, Color, ContentArrangement, Table};
+use terminal_size::{terminal_size, Width};
 
 use crate::config;
 use crate::db;
-use crate::model::{SortKey, Status};
+use crate::model::{SortKey, SortOrder, Status};
+
+const NARROW_THRESHOLD: u16 = 60;
 
 #[derive(Args)]
 pub struct ListArgs {
@@ -21,6 +24,14 @@ pub struct ListArgs {
     /// Sort by: id, due, project, created
     #[arg(short, long, default_value = "id")]
     pub sort: String,
+
+    /// Sort ascending
+    #[arg(long, conflicts_with = "desc")]
+    pub asc: bool,
+
+    /// Sort descending
+    #[arg(long, conflicts_with = "asc")]
+    pub desc: bool,
 }
 
 pub fn run(args: ListArgs) {
@@ -47,7 +58,13 @@ pub fn run(args: ListArgs) {
         }
     };
 
-    let tasks = match db::list_tasks(&conn, args.all, args.project.as_deref(), sort) {
+    let order = if args.desc {
+        SortOrder::Desc
+    } else {
+        SortOrder::Asc
+    };
+
+    let tasks = match db::list_tasks(&conn, args.all, args.project.as_deref(), sort, order) {
         Ok(t) => t,
         Err(_) => {
             eprintln!("Error: failed to read database: {}", db_path.display());
@@ -68,12 +85,24 @@ pub fn run(args: ListArgs) {
 
     let project_colors = build_project_color_map(&tasks);
 
+    let term_width = terminal_size().map(|(Width(w), _)| w).unwrap_or(80);
+    let compact = term_width < NARROW_THRESHOLD;
+
     let mut table = Table::new();
     table
         .load_preset(UTF8_FULL)
         .apply_modifier(UTF8_SOLID_INNER_BORDERS)
         .set_content_arrangement(ContentArrangement::Dynamic)
-        .set_header(vec![
+        .set_width(term_width);
+
+    if compact {
+        table.set_header(vec![
+            Cell::new("ID").add_attribute(Attribute::Bold),
+            Cell::new("Title").add_attribute(Attribute::Bold),
+            Cell::new("Due").add_attribute(Attribute::Bold),
+        ]);
+    } else {
+        table.set_header(vec![
             Cell::new("ID").add_attribute(Attribute::Bold),
             Cell::new("Status").add_attribute(Attribute::Bold),
             Cell::new("Project").add_attribute(Attribute::Bold),
@@ -81,6 +110,7 @@ pub fn run(args: ListArgs) {
             Cell::new("Due").add_attribute(Attribute::Bold),
             Cell::new("Age").add_attribute(Attribute::Bold),
         ]);
+    }
 
     for task in &tasks {
         let is_done = task.status == Status::Done;
@@ -106,7 +136,43 @@ pub fn run(args: ListArgs) {
             format!("{}d", days)
         };
 
-        if is_done {
+        if compact {
+            let id_cell = if is_done {
+                Cell::new(&id_text).fg(Color::Green)
+            } else if is_closed {
+                Cell::new(&id_text).fg(Color::DarkGrey)
+            } else {
+                Cell::new(&id_text).fg(Color::Cyan)
+            };
+
+            let title_cell = if is_done {
+                Cell::new(&task.title).fg(Color::Green)
+            } else if is_closed {
+                Cell::new(&task.title).fg(Color::DarkGrey)
+            } else if is_overdue {
+                Cell::new(&task.title).fg(Color::Red)
+            } else {
+                Cell::new(&task.title)
+            };
+
+            let due_cell = if is_inactive {
+                Cell::new(&due_text).fg(if is_done {
+                    Color::Green
+                } else {
+                    Color::DarkGrey
+                })
+            } else if is_overdue {
+                Cell::new(&due_text).fg(Color::Red)
+            } else if is_due_today {
+                Cell::new(&due_text).fg(Color::Yellow)
+            } else if task.due.is_some() {
+                Cell::new(&due_text).fg(Color::Green)
+            } else {
+                Cell::new(&due_text)
+            };
+
+            table.add_row(vec![id_cell, title_cell, due_cell]);
+        } else if is_done {
             let green = Color::Green;
             table.add_row(vec![
                 Cell::new(id_text).fg(green),
@@ -172,8 +238,10 @@ pub fn run(args: ListArgs) {
     let id_col = table.column_mut(0).expect("id column");
     id_col.set_cell_alignment(CellAlignment::Right);
 
-    let age_col = table.column_mut(5).expect("age column");
-    age_col.set_cell_alignment(CellAlignment::Right);
+    if !compact {
+        let age_col = table.column_mut(5).expect("age column");
+        age_col.set_cell_alignment(CellAlignment::Right);
+    }
 
     println!("{table}");
 

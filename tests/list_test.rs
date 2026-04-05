@@ -164,6 +164,39 @@ fn test_list_sort_by_project() {
 }
 
 #[test]
+fn test_list_sort_desc_by_project() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["add", "Zebra task", "--project", "z-proj"])
+        .assert()
+        .success();
+    cmd(&db_path)
+        .args(["add", "Alpha task", "--project", "a-proj"])
+        .assert()
+        .success();
+    cmd(&db_path)
+        .args(["add", "Middle task", "--project", "m-proj"])
+        .assert()
+        .success();
+
+    let output = cmd(&db_path)
+        .args(["list", "--sort", "project", "--desc"])
+        .assert()
+        .success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+
+    let pos_a = stdout.find("Alpha task").unwrap();
+    let pos_m = stdout.find("Middle task").unwrap();
+    let pos_z = stdout.find("Zebra task").unwrap();
+    assert!(
+        pos_z < pos_m && pos_m < pos_a,
+        "z-proj should appear before m-proj before a-proj in descending order"
+    );
+}
+
+#[test]
 fn test_list_sort_invalid() {
     let tmp = TempDir::new().unwrap();
     let db_path = tmp.path().join("tasks.db");
@@ -178,6 +211,84 @@ fn test_list_sort_invalid() {
 }
 
 #[test]
+fn test_list_sort_asc() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path).args(["add", "First"]).assert().success();
+    cmd(&db_path).args(["add", "Second"]).assert().success();
+    cmd(&db_path).args(["add", "Third"]).assert().success();
+
+    let output = cmd(&db_path)
+        .args(["list", "--sort", "id", "--asc"])
+        .assert()
+        .success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+
+    let pos_first = stdout.find("First").unwrap();
+    let pos_third = stdout.find("Third").unwrap();
+    assert!(
+        pos_first < pos_third,
+        "First should appear before Third in ascending order"
+    );
+}
+
+#[test]
+fn test_list_sort_desc() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path).args(["add", "First"]).assert().success();
+    cmd(&db_path).args(["add", "Second"]).assert().success();
+    cmd(&db_path).args(["add", "Third"]).assert().success();
+
+    let output = cmd(&db_path)
+        .args(["list", "--sort", "id", "--desc"])
+        .assert()
+        .success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+
+    let pos_first = stdout.find("First").unwrap();
+    let pos_third = stdout.find("Third").unwrap();
+    assert!(
+        pos_third < pos_first,
+        "Third should appear before First in descending order"
+    );
+}
+
+#[test]
+fn test_list_sort_asc_desc_conflict() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["list", "--asc", "--desc"])
+        .assert()
+        .failure();
+}
+
+#[test]
+fn test_list_sort_default_order() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path).args(["add", "First"]).assert().success();
+    cmd(&db_path).args(["add", "Second"]).assert().success();
+    cmd(&db_path).args(["add", "Third"]).assert().success();
+
+    // Default (no --asc/--desc) should be ascending
+    let output = cmd(&db_path)
+        .args(["list", "--sort", "id"])
+        .assert()
+        .success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+
+    let pos_first = stdout.find("First").unwrap();
+    let pos_third = stdout.find("Third").unwrap();
+    assert!(pos_first < pos_third, "Default order should be ascending");
+}
+
+#[test]
 fn test_ls_alias() {
     let tmp = TempDir::new().unwrap();
     let db_path = tmp.path().join("tasks.db");
@@ -189,4 +300,52 @@ fn test_ls_alias() {
     let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
     assert!(stdout.contains("Alias test"));
     assert!(stdout.contains("1 tasks"));
+}
+
+#[test]
+fn test_list_no_panic_in_pipe() {
+    // When running in a pipe (no TTY), terminal_size() returns None.
+    // The command should still work without panicking by using a default width.
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args([
+            "add",
+            "Task with a fairly long title for testing width handling",
+        ])
+        .assert()
+        .success();
+    cmd(&db_path)
+        .args(["add", "Short", "--project", "proj"])
+        .assert()
+        .success();
+
+    // assert_cmd captures stdout via pipe, so terminal_size() returns None (default 80)
+    cmd(&db_path)
+        .args(["list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Task with a fairly long title"))
+        .stdout(predicate::str::contains("Short"));
+}
+
+#[test]
+fn test_list_many_tasks_no_panic() {
+    // Ensure table rendering doesn't panic even with many rows
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    for i in 1..=20 {
+        cmd(&db_path)
+            .args(["add", &format!("Task number {}", i)])
+            .assert()
+            .success();
+    }
+
+    cmd(&db_path)
+        .args(["list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("20 tasks"));
 }

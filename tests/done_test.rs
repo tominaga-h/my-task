@@ -57,3 +57,61 @@ fn test_done_already_done() {
         .failure()
         .stderr(predicate::str::contains("Error: task #1 is already done"));
 }
+
+#[test]
+fn test_done_multiple_ids() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path).args(["add", "Task A"]).assert().success();
+    cmd(&db_path).args(["add", "Task B"]).assert().success();
+    cmd(&db_path).args(["add", "Task C"]).assert().success();
+
+    cmd(&db_path)
+        .args(["done", "1", "2", "3"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Done: #1 Task A"))
+        .stdout(predicate::str::contains("Done: #2 Task B"))
+        .stdout(predicate::str::contains("Done: #3 Task C"));
+
+    let output = cmd(&db_path).args(["list"]).assert().success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+    assert!(!stdout.contains("Task A"));
+    assert!(!stdout.contains("Task B"));
+    assert!(!stdout.contains("Task C"));
+}
+
+#[test]
+fn test_done_multiple_ids_partial_failure() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path).args(["add", "Real task"]).assert().success();
+    cmd(&db_path)
+        .args(["add", "Another real task"])
+        .assert()
+        .success();
+
+    cmd(&db_path)
+        .args(["done", "1", "999", "2"])
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("Done: #1 Real task"))
+        .stdout(predicate::str::contains("Done: #2 Another real task"))
+        .stderr(predicate::str::contains("Error: task #999 not found"));
+
+    // Verify successful ones are actually done
+    let output = cmd(&db_path).args(["list"]).assert().success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+    assert!(!stdout.contains("Real task"));
+    assert!(!stdout.contains("Another real task"));
+}
+
+#[test]
+fn test_done_multiple_ids_no_args() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path).args(["done"]).assert().failure();
+}
