@@ -1,5 +1,5 @@
 {
-  "name": "my-task-dev-cycle",
-  "version": "1.0.0",
-  "description": "my-task プロジェクト専用の TODO 駆動開発サイクルプラグイン"
+  "name": "my-task-plugin",
+  "version": "1.1.0",
+  "description": "my-task プロジェクト専用のClaude Codeプラグイン"
 }

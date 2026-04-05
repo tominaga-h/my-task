@@ -19,6 +19,19 @@
       "license": "MIT",
       "category": "command-line-utilities",
       "tags": ["task", "todo", "development", "productivity"]
+    },
+    {
+      "name": "text-to-tasks",
+      "source": "./cc-plugin",
+      "description": "my-task スキル。プレーンテキストからタスクを抽出して登録する。",
+      "version": "1.0.0",
+      "author": {
+        "name": "tominaga-h"
+      },
+      "repository": "https://github.com/tominaga-h/my-task",
+      "license": "MIT",
+      "category": "productivity",
+      "tags": ["task", "todo", "text", "extract", "register"]
     }
   ]
 }
