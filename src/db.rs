@@ -194,6 +194,23 @@ pub fn update_task(
     Ok(())
 }
 
+pub fn get_due_tasks(
+    conn: &Connection,
+    target_date: NaiveDate,
+) -> Result<Vec<Task>, rusqlite::Error> {
+    let target_str = target_date.to_string();
+    let mut stmt = conn.prepare(
+        "SELECT id, title, status, source, project, due, done_at, created, updated
+         FROM tasks
+         WHERE status = 'open' AND due IS NOT NULL AND due <= ?1
+         ORDER BY due ASC",
+    )?;
+    let tasks = stmt
+        .query_map(params![target_str], row_to_task)?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(tasks)
+}
+
 fn parse_date(s: &str) -> NaiveDate {
     NaiveDate::parse_from_str(s, "%Y-%m-%d").expect("invalid date in database")
 }
@@ -318,5 +335,50 @@ mod tests {
         let conn = open_in_memory().unwrap();
         let result = find_task(&conn, 999).unwrap();
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_get_due_tasks_returns_due_before_target() {
+        let conn = open_in_memory().unwrap();
+        let t = today();
+        let past = NaiveDate::from_ymd_opt(2026, 3, 28).unwrap();
+        let future = NaiveDate::from_ymd_opt(2026, 5, 1).unwrap();
+
+        add_task(&conn, "Overdue", None, Some(past), t).unwrap();
+        add_task(&conn, "Due today", None, Some(t), t).unwrap();
+        add_task(&conn, "Future", None, Some(future), t).unwrap();
+        add_task(&conn, "No due", None, None, t).unwrap();
+
+        let tasks = get_due_tasks(&conn, t).unwrap();
+        assert_eq!(tasks.len(), 2);
+        assert_eq!(tasks[0].title, "Overdue");
+        assert_eq!(tasks[1].title, "Due today");
+    }
+
+    #[test]
+    fn test_get_due_tasks_excludes_non_open() {
+        let conn = open_in_memory().unwrap();
+        let t = today();
+
+        let id1 = add_task(&conn, "Done task", None, Some(t), t).unwrap();
+        complete_task(&conn, id1, t).unwrap();
+        let id2 = add_task(&conn, "Closed task", None, Some(t), t).unwrap();
+        close_task(&conn, id2, t).unwrap();
+        add_task(&conn, "Open task", None, Some(t), t).unwrap();
+
+        let tasks = get_due_tasks(&conn, t).unwrap();
+        assert_eq!(tasks.len(), 1);
+        assert_eq!(tasks[0].title, "Open task");
+    }
+
+    #[test]
+    fn test_get_due_tasks_excludes_null_due() {
+        let conn = open_in_memory().unwrap();
+        let t = today();
+
+        add_task(&conn, "No due", None, None, t).unwrap();
+
+        let tasks = get_due_tasks(&conn, t).unwrap();
+        assert!(tasks.is_empty());
     }
 }
