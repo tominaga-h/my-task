@@ -7,7 +7,8 @@
       "Bash(git commit:*)",
       "Bash(git checkout:*)",
       "Bash(git merge:*)",
-      "Bash(cargo run:*)"
+      "Bash(cargo run:*)",
+      "Bash(my-task add:*)"
     ]
   }
 }
