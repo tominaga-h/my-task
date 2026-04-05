@@ -6,9 +6,13 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git checkout:*)",
+      "Bash(git pull:*)",
       "Bash(git merge:*)",
+      "Bash(git push:*)",
       "Bash(cargo run:*)",
-      "Bash(my-task add:*)"
+      "Bash(my-task *)",
+      "Bash(make check:*)",
+      "Bash(make release:*)"
     ]
   }
 }
