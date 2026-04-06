@@ -25,6 +25,10 @@ pub struct EditArgs {
     #[arg(short, long)]
     pub due: Option<String>,
 
+    /// Remind date (YYYY-MM-DD, 今日, 明日, 来週, 月曜〜日曜, etc.)
+    #[arg(short, long)]
+    pub remind: Option<String>,
+
     /// Open in editor (like git rebase -i)
     #[arg(short = 'i', long)]
     pub interactive: bool,
@@ -36,8 +40,14 @@ pub struct EditArgs {
 
 pub fn run(args: EditArgs) {
     if args.interactive {
-        if args.title.is_some() || args.project.is_some() || args.due.is_some() {
-            eprintln!("Error: --interactive cannot be used with --title, --project, --due");
+        if args.title.is_some()
+            || args.project.is_some()
+            || args.due.is_some()
+            || args.remind.is_some()
+        {
+            eprintln!(
+                "Error: --interactive cannot be used with --title, --project, --due, --remind"
+            );
             std::process::exit(1);
         }
         run_interactive(args.id, args.filter_project);
@@ -55,8 +65,11 @@ fn run_flag(args: EditArgs) {
         }
     };
 
-    if args.title.is_none() && args.project.is_none() && args.due.is_none() {
-        eprintln!("Error: specify at least one field to edit (--title, --project, --due)");
+    if args.title.is_none() && args.project.is_none() && args.due.is_none() && args.remind.is_none()
+    {
+        eprintln!(
+            "Error: specify at least one field to edit (--title, --project, --due, --remind)"
+        );
         std::process::exit(1);
     }
 
@@ -98,19 +111,39 @@ fn run_flag(args: EditArgs) {
         })
     });
 
+    let remind = args.remind.as_ref().map(|s| {
+        date_parser::parse_fuzzy_date(s).unwrap_or_else(|| {
+            eprintln!(
+                "Error: invalid remind date '{}'. Use: YYYY-MM-DD, 今日, 明日, 来週, 曜日名 etc.",
+                s
+            );
+            std::process::exit(1);
+        })
+    });
+
     let today = Local::now().date_naive();
-    if db::update_task(
-        &conn,
-        id,
-        args.title.as_deref(),
-        args.project.as_deref(),
-        due,
-        today,
-    )
-    .is_err()
+
+    // Only call update_task if there are task field changes
+    if (args.title.is_some() || args.project.is_some() || due.is_some())
+        && db::update_task(
+            &conn,
+            id,
+            args.title.as_deref(),
+            args.project.as_deref(),
+            due,
+            today,
+        )
+        .is_err()
     {
         eprintln!("Error: failed to write database: {}", db_path.display());
         std::process::exit(1);
+    }
+
+    if let Some(remind_date) = remind {
+        if db::add_remind(&conn, id, remind_date).is_err() {
+            eprintln!("Error: failed to write database: {}", db_path.display());
+            std::process::exit(1);
+        }
     }
 
     let task = db::find_task(&conn, id).unwrap().unwrap();
@@ -127,7 +160,7 @@ fn run_interactive(id: Option<u32>, filter_project: Option<String>) {
         }
     };
 
-    let tasks: Vec<Task> = if let Some(id) = id {
+    let mut tasks: Vec<Task> = if let Some(id) = id {
         match db::find_task(&conn, id) {
             Ok(Some(t)) => vec![t],
             Ok(None) => {
@@ -154,6 +187,11 @@ fn run_interactive(id: Option<u32>, filter_project: Option<String>) {
             }
         }
     };
+
+    // Fill reminds for each task
+    for task in &mut tasks {
+        task.reminds = db::get_reminds_for_task(&conn, task.id).unwrap_or_default();
+    }
 
     if tasks.is_empty() {
         println!("No tasks to edit");
@@ -227,8 +265,9 @@ fn run_interactive(id: Option<u32>, filter_project: Option<String>) {
         let title_changed = entry.title != orig.title;
         let project_changed = entry.project != orig.project;
         let due_changed = entry.due != orig.due;
+        let reminds_changed = entry.reminds != orig.reminds;
 
-        if !title_changed && !project_changed && !due_changed {
+        if !title_changed && !project_changed && !due_changed && !reminds_changed {
             continue;
         }
 
@@ -237,22 +276,38 @@ fn run_interactive(id: Option<u32>, filter_project: Option<String>) {
             std::process::exit(1);
         }
 
-        let new_title = if title_changed {
-            Some(entry.title.as_str())
-        } else {
-            None
-        };
-        let new_project = if project_changed {
-            Some(entry.project.as_deref().unwrap_or(""))
-        } else {
-            None
-        };
-        let new_due = if due_changed { entry.due } else { None };
+        if title_changed || project_changed || due_changed {
+            let new_title = if title_changed {
+                Some(entry.title.as_str())
+            } else {
+                None
+            };
+            let new_project = if project_changed {
+                Some(entry.project.as_deref().unwrap_or(""))
+            } else {
+                None
+            };
+            let new_due = if due_changed { entry.due } else { None };
 
-        if db::update_task(&conn, entry.id, new_title, new_project, new_due, today).is_err() {
-            eprintln!("Error: failed to update task #{}", entry.id);
-            std::process::exit(1);
+            if db::update_task(&conn, entry.id, new_title, new_project, new_due, today).is_err() {
+                eprintln!("Error: failed to update task #{}", entry.id);
+                std::process::exit(1);
+            }
         }
+
+        if reminds_changed {
+            if db::delete_reminds_for_task(&conn, entry.id).is_err() {
+                eprintln!("Error: failed to update reminds for task #{}", entry.id);
+                std::process::exit(1);
+            }
+            for remind_date in &entry.reminds {
+                if db::add_remind(&conn, entry.id, *remind_date).is_err() {
+                    eprintln!("Error: failed to add remind for task #{}", entry.id);
+                    std::process::exit(1);
+                }
+            }
+        }
+
         updated_count += 1;
     }
 
@@ -288,6 +343,8 @@ fn tasks_to_yaml(tasks: &[Task]) -> String {
             "  due: {}\n",
             task.due.map(|d| d.to_string()).unwrap_or_default()
         ));
+        let remind_str: Vec<String> = task.reminds.iter().map(|d| d.to_string()).collect();
+        out.push_str(&format!("  remind: {}\n", remind_str.join(", ")));
     }
     out
 }
@@ -298,6 +355,7 @@ struct EditEntry {
     title: String,
     project: Option<String>,
     due: Option<NaiveDate>,
+    reminds: Vec<NaiveDate>,
 }
 
 fn parse_yaml(input: &str) -> Vec<EditEntry> {
@@ -306,6 +364,7 @@ fn parse_yaml(input: &str) -> Vec<EditEntry> {
     let mut current_title: Option<String> = None;
     let mut current_project: Option<String> = None;
     let mut current_due: Option<NaiveDate> = None;
+    let mut current_reminds: Vec<NaiveDate> = Vec::new();
 
     for (line_num, line) in input.lines().enumerate() {
         let trimmed = line.trim();
@@ -321,6 +380,7 @@ fn parse_yaml(input: &str) -> Vec<EditEntry> {
                     title: current_title.take().unwrap_or_default(),
                     project: current_project.take(),
                     due: current_due.take(),
+                    reminds: std::mem::take(&mut current_reminds),
                 });
             }
             let val = trimmed.trim_start_matches("- id:").trim();
@@ -331,6 +391,7 @@ fn parse_yaml(input: &str) -> Vec<EditEntry> {
             current_title = None;
             current_project = None;
             current_due = None;
+            current_reminds = Vec::new();
         } else if trimmed.starts_with("title:") {
             let val = trimmed.trim_start_matches("title:").trim();
             current_title = Some(val.to_string());
@@ -351,6 +412,22 @@ fn parse_yaml(input: &str) -> Vec<EditEntry> {
                     std::process::exit(1);
                 }))
             };
+        } else if trimmed.starts_with("remind:") {
+            let val = trimmed.trim_start_matches("remind:").trim();
+            current_reminds = if val.is_empty() {
+                Vec::new()
+            } else {
+                val.split(',')
+                    .map(|s| s.trim())
+                    .filter(|s| !s.is_empty())
+                    .map(|s| {
+                        date_parser::parse_fuzzy_date(s).unwrap_or_else(|| {
+                            eprintln!("Error: failed to parse edit file at line {}", line_num + 1);
+                            std::process::exit(1);
+                        })
+                    })
+                    .collect()
+            };
         }
     }
 
@@ -361,6 +438,7 @@ fn parse_yaml(input: &str) -> Vec<EditEntry> {
             title: current_title.unwrap_or_default(),
             project: current_project,
             due: current_due,
+            reminds: current_reminds,
         });
     }
 
@@ -466,6 +544,10 @@ mod tests {
             due: Some(NaiveDate::from_ymd_opt(2026, 4, 10).unwrap()),
             done_at: None,
             updated: NaiveDate::from_ymd_opt(2026, 3, 31).unwrap(),
+            reminds: vec![
+                NaiveDate::from_ymd_opt(2026, 4, 8).unwrap(),
+                NaiveDate::from_ymd_opt(2026, 4, 9).unwrap(),
+            ],
         }];
         let yaml = tasks_to_yaml(&tasks);
         let entries = parse_yaml(&yaml);
@@ -476,6 +558,15 @@ mod tests {
         assert_eq!(
             entries[0].due,
             Some(NaiveDate::from_ymd_opt(2026, 4, 10).unwrap())
+        );
+        assert_eq!(entries[0].reminds.len(), 2);
+        assert_eq!(
+            entries[0].reminds[0],
+            NaiveDate::from_ymd_opt(2026, 4, 8).unwrap()
+        );
+        assert_eq!(
+            entries[0].reminds[1],
+            NaiveDate::from_ymd_opt(2026, 4, 9).unwrap()
         );
     }
 }

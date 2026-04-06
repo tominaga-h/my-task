@@ -122,6 +122,85 @@ fn test_add_invalid_due() {
 }
 
 #[test]
+fn test_add_with_remind() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["add", "Remind task", "--remind", "2026-04-10"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Added: #1 Remind task"));
+
+    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    let remind: String = conn
+        .query_row(
+            "SELECT remind_at FROM task_reminds WHERE task_id = 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(remind, "2026-04-10");
+}
+
+#[test]
+fn test_add_with_remind_fuzzy() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["add", "Remind tomorrow", "--remind", "明日"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Added: #1"));
+
+    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    let remind: String = conn
+        .query_row(
+            "SELECT remind_at FROM task_reminds WHERE task_id = 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let tomorrow = (chrono::Local::now().date_naive() + chrono::Duration::days(1)).to_string();
+    assert_eq!(remind, tomorrow);
+}
+
+#[test]
+fn test_add_with_remind_invalid() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["add", "Bad remind", "--remind", "invalid"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("invalid remind date"));
+}
+
+#[test]
+fn test_add_with_remind_short_flag() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["add", "Short flag", "-r", "2026-05-01"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Added: #1"));
+
+    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    let remind: String = conn
+        .query_row(
+            "SELECT remind_at FROM task_reminds WHERE task_id = 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(remind, "2026-05-01");
+}
+
+#[test]
 fn test_add_empty_title() {
     let tmp = TempDir::new().unwrap();
     let db_path = tmp.path().join("tasks.db");

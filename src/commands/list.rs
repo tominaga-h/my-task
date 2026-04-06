@@ -77,6 +77,12 @@ pub fn run(args: ListArgs) {
         return;
     }
 
+    // Fill reminds for each task
+    let mut tasks = tasks;
+    for task in &mut tasks {
+        task.reminds = db::get_reminds_for_task(&conn, task.id).unwrap_or_default();
+    }
+
     let today = Local::now().date_naive();
     let done_count = tasks
         .iter()
@@ -108,6 +114,7 @@ pub fn run(args: ListArgs) {
             Cell::new("Project").add_attribute(Attribute::Bold),
             Cell::new("Title").add_attribute(Attribute::Bold),
             Cell::new("Due").add_attribute(Attribute::Bold),
+            Cell::new("Remind").add_attribute(Attribute::Bold),
             Cell::new("Age").add_attribute(Attribute::Bold),
         ]);
     }
@@ -125,6 +132,12 @@ pub fn run(args: ListArgs) {
             .due
             .map(|d| format!("{}/{}", d.month(), d.day()))
             .unwrap_or_default();
+        let remind_text: String = task
+            .reminds
+            .iter()
+            .map(|d| format!("{}/{}", d.month(), d.day()))
+            .collect::<Vec<_>>()
+            .join(", ");
         let age_text = if is_done {
             task.done_at
                 .map(|d| format!("done {}/{}", d.month(), d.day()))
@@ -183,6 +196,7 @@ pub fn run(args: ListArgs) {
                     .unwrap_or(Color::White)),
                 Cell::new(&task.title).fg(green),
                 Cell::new(due_text).fg(green),
+                Cell::new(&remind_text).fg(green),
                 Cell::new(age_text).fg(green),
             ]);
         } else if is_closed {
@@ -193,6 +207,7 @@ pub fn run(args: ListArgs) {
                 Cell::new(project_text).fg(grey),
                 Cell::new(&task.title).fg(grey),
                 Cell::new(due_text).fg(grey),
+                Cell::new(&remind_text).fg(grey),
                 Cell::new(age_text).fg(grey),
             ]);
         } else {
@@ -221,6 +236,8 @@ pub fn run(args: ListArgs) {
                 Cell::new(age_text)
             };
 
+            let remind_cell = Cell::new(&remind_text);
+
             table.add_row(vec![
                 Cell::new(id_text).fg(Color::Cyan),
                 Cell::new("OPEN").fg(Color::Blue),
@@ -230,6 +247,7 @@ pub fn run(args: ListArgs) {
                     .unwrap_or(Color::White)),
                 title_cell,
                 due_cell,
+                remind_cell,
                 age_cell,
             ]);
         }
@@ -239,7 +257,7 @@ pub fn run(args: ListArgs) {
     id_col.set_cell_alignment(CellAlignment::Right);
 
     if !compact {
-        let age_col = table.column_mut(5).expect("age column");
+        let age_col = table.column_mut(6).expect("age column");
         age_col.set_cell_alignment(CellAlignment::Right);
     }
 

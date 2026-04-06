@@ -87,7 +87,7 @@ git checkout -b feature/<タスク内容を表す短い英語名>
 
 #### 3a. Planner（設計）
 
-Agent ツールでサブエージェントを起動し、実装計画を策定する。
+Agent ツールで `planner` エージェント（`agents/planner.md`）を起動し、実装計画を策定する。
 
 Planner への指示内容:
 - タスクの内容と目的を伝える
@@ -101,7 +101,7 @@ Planner の出力を確認し、必要に応じてユーザーに方針の確認
 
 #### 3b. Generator（実装）
 
-Agent ツールでサブエージェントを起動し、Planner の計画に基づいて実装する。
+Agent ツールで `generator` エージェント（`agents/generator.md`）を起動し、Planner の計画に基づいて実装する。
 
 Generator への指示内容:
 - Planner が策定した計画と受け入れ基準を渡す
@@ -114,7 +114,7 @@ Generator への指示内容:
 
 #### 3c. Evaluator（評価）
 
-Agent ツールで **別の** サブエージェントを起動し、Generator の実装を検証する。
+Agent ツールで `evaluator` エージェント（`agents/evaluator.md`）を起動し、Generator の実装を検証する。
 Generator と同一エージェントで評価させないこと（自己評価バイアスの防止）。
 
 Evaluator への指示内容:
