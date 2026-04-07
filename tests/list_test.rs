@@ -197,6 +197,65 @@ fn test_list_sort_desc_by_project() {
 }
 
 #[test]
+fn test_list_sort_multiple_keys() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args([
+            "add",
+            "A in beta",
+            "--project",
+            "beta",
+            "--due",
+            "2026-04-10",
+        ])
+        .assert()
+        .success();
+    cmd(&db_path)
+        .args([
+            "add",
+            "B in alpha",
+            "--project",
+            "alpha",
+            "--due",
+            "2026-04-20",
+        ])
+        .assert()
+        .success();
+    cmd(&db_path)
+        .args([
+            "add",
+            "C in alpha",
+            "--project",
+            "alpha",
+            "--due",
+            "2026-04-05",
+        ])
+        .assert()
+        .success();
+
+    // Sort by project first, then by due
+    let output = cmd(&db_path)
+        .args(["list", "--sort", "project", "--sort", "due"])
+        .assert()
+        .success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+
+    let pos_c = stdout.find("C in alpha").unwrap();
+    let pos_b = stdout.find("B in alpha").unwrap();
+    let pos_a = stdout.find("A in beta").unwrap();
+    // alpha group first, within alpha: C (04-05) before B (04-20), then beta: A
+    assert!(
+        pos_c < pos_b && pos_b < pos_a,
+        "Should sort by project then due: C < B < A, got c={} b={} a={}",
+        pos_c,
+        pos_b,
+        pos_a
+    );
+}
+
+#[test]
 fn test_list_sort_invalid() {
     let tmp = TempDir::new().unwrap();
     let db_path = tmp.path().join("tasks.db");
