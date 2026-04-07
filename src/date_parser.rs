@@ -34,13 +34,27 @@ pub fn parse_fuzzy_date(input: &str) -> Option<NaiveDate> {
             NaiveDate::from_ymd_opt(y, m, d)
         }
         // 曜日指定 (次のその曜日)
-        "月曜" | "月" | "mon" | "monday" => Some(next_weekday(today, chrono::Weekday::Mon)),
-        "火曜" | "火" | "tue" | "tuesday" => Some(next_weekday(today, chrono::Weekday::Tue)),
-        "水曜" | "水" | "wed" | "wednesday" => Some(next_weekday(today, chrono::Weekday::Wed)),
-        "木曜" | "木" | "thu" | "thursday" => Some(next_weekday(today, chrono::Weekday::Thu)),
-        "金曜" | "金" | "fri" | "friday" => Some(next_weekday(today, chrono::Weekday::Fri)),
-        "土曜" | "土" | "sat" | "saturday" => Some(next_weekday(today, chrono::Weekday::Sat)),
-        "日曜" | "日" | "sun" | "sunday" => Some(next_weekday(today, chrono::Weekday::Sun)),
+        "月曜日" | "月曜" | "月" | "mon" | "monday" => {
+            Some(next_weekday(today, chrono::Weekday::Mon))
+        }
+        "火曜日" | "火曜" | "火" | "tue" | "tuesday" => {
+            Some(next_weekday(today, chrono::Weekday::Tue))
+        }
+        "水曜日" | "水曜" | "水" | "wed" | "wednesday" => {
+            Some(next_weekday(today, chrono::Weekday::Wed))
+        }
+        "木曜日" | "木曜" | "木" | "thu" | "thursday" => {
+            Some(next_weekday(today, chrono::Weekday::Thu))
+        }
+        "金曜日" | "金曜" | "金" | "fri" | "friday" => {
+            Some(next_weekday(today, chrono::Weekday::Fri))
+        }
+        "土曜日" | "土曜" | "土" | "sat" | "saturday" => {
+            Some(next_weekday(today, chrono::Weekday::Sat))
+        }
+        "日曜日" | "日曜" | "日" | "sun" | "sunday" => {
+            Some(next_weekday(today, chrono::Weekday::Sun))
+        }
         _ => None,
     }
 }
@@ -125,6 +139,23 @@ mod tests {
         let mon = parse_fuzzy_date("mon").unwrap();
         assert_eq!(mon.weekday(), chrono::Weekday::Mon);
         assert!(mon > today);
+    }
+
+    #[test]
+    fn test_parse_weekday_with_nichi_suffix() {
+        let today = Local::now().date_naive();
+        let mon = parse_fuzzy_date("月曜日").unwrap();
+        assert_eq!(mon.weekday(), chrono::Weekday::Mon);
+        assert!(mon > today);
+        assert!((mon - today).num_days() <= 7);
+
+        let wed = parse_fuzzy_date("水曜日").unwrap();
+        assert_eq!(wed.weekday(), chrono::Weekday::Wed);
+        assert!(wed > today);
+
+        let sun = parse_fuzzy_date("日曜日").unwrap();
+        assert_eq!(sun.weekday(), chrono::Weekday::Sun);
+        assert!(sun > today);
     }
 
     #[test]

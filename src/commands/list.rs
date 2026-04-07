@@ -21,9 +21,9 @@ pub struct ListArgs {
     #[arg(short, long)]
     pub project: Option<String>,
 
-    /// Sort by: id, due, project, created
+    /// Sort by: id, due, project, created (repeatable)
     #[arg(short, long, default_value = "id")]
-    pub sort: String,
+    pub sort: Vec<String>,
 
     /// Sort ascending
     #[arg(long, conflicts_with = "desc")]
@@ -44,19 +44,23 @@ pub fn run(args: ListArgs) {
         }
     };
 
-    let sort = match args.sort.as_str() {
-        "id" => SortKey::Id,
-        "due" => SortKey::Due,
-        "project" => SortKey::Project,
-        "created" | "age" => SortKey::Created,
-        other => {
-            eprintln!(
-                "Error: unknown sort key '{}'. Use: id, due, project, created",
-                other
-            );
-            std::process::exit(1);
-        }
-    };
+    let sorts: Vec<SortKey> = args
+        .sort
+        .iter()
+        .map(|s| match s.as_str() {
+            "id" => SortKey::Id,
+            "due" => SortKey::Due,
+            "project" => SortKey::Project,
+            "created" | "age" => SortKey::Created,
+            other => {
+                eprintln!(
+                    "Error: unknown sort key '{}'. Use: id, due, project, created",
+                    other
+                );
+                std::process::exit(1);
+            }
+        })
+        .collect();
 
     let order = if args.desc {
         SortOrder::Desc
@@ -64,7 +68,7 @@ pub fn run(args: ListArgs) {
         SortOrder::Asc
     };
 
-    let tasks = match db::list_tasks(&conn, args.all, args.project.as_deref(), sort, order) {
+    let tasks = match db::list_tasks(&conn, args.all, args.project.as_deref(), &sorts, order) {
         Ok(t) => t,
         Err(_) => {
             eprintln!("Error: failed to read database: {}", db_path.display());

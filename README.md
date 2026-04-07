@@ -1,10 +1,10 @@
 # my-task
 
+![version](https://img.shields.io/badge/version-1.0.0-blue)
+
 A simple CLI task manager powered by SQLite.
 
-[日本語ドキュメント](docs/README_ja.md)
-
-> **This project is under active development.** Features and CLI interface may change without notice.
+[日本語ドキュメント](docs/README_ja.md) | [Changelog](docs/CHANGELOG.md)
 
 ![DEMO](./images/demo-list-all.png)
 
@@ -56,7 +56,7 @@ The `--due` flag accepts natural language in both English and Japanese:
 | `明後日` | Day after tomorrow |
 | `next week` / `来週` | 7 days from now |
 | `next month` / `来月` | Same day next month |
-| `mon`-`sun` / `月曜`-`日曜` | Next occurrence of that weekday |
+| `mon`-`sun` / `月曜`-`日曜` / `月曜日`-`日曜日` | Next occurrence of that weekday |
 
 ### Mark a task as done
 
@@ -91,6 +91,7 @@ my-task ls                   # Alias
 my-task list --all           # Include done/closed tasks
 my-task list -P my-app       # Filter by project
 my-task list --sort due      # Sort by: id, due, project, created
+my-task list --sort project --sort due  # Multiple sort keys
 ```
 
 ![DEMO](./images/demo-list.png)
@@ -216,7 +217,7 @@ List tasks in a table. Alias: `my-task ls`
 |--------|-------|---------|-------------|
 | `--all` | `-a` | `false` | Show all tasks including done and closed |
 | `--project <NAME>` | `-P` | — | Filter by project name |
-| `--sort <KEY>` | `-s` | `id` | Sort by: `id`, `due`, `project`, `created` (`age` is alias for `created`) |
+| `--sort <KEY>` | `-s` | `id` | Sort by: `id`, `due`, `project`, `created` (`age` is alias for `created`). Repeatable for multi-key sort |
 
 **Display rules:**
 - Open tasks: default colors. Overdue titles/due dates shown in red, due today in yellow, future due in green.
