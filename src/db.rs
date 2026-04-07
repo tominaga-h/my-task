@@ -113,7 +113,7 @@ pub fn list_tasks(
     conn: &Connection,
     all: bool,
     project: Option<&str>,
-    sort: SortKey,
+    sorts: &[SortKey],
     order: SortOrder,
 ) -> Result<Vec<Task>, rusqlite::Error> {
     let base =
@@ -130,13 +130,12 @@ pub fn list_tasks(
     } else {
         format!(" WHERE {}", conditions.join(" AND "))
     };
-    let sql = format!(
-        "{}{} ORDER BY {} {}",
-        base,
-        where_clause,
-        sort.as_sql(),
-        order.as_sql()
-    );
+    let order_clause = sorts
+        .iter()
+        .map(|k| format!("{} {}", k.as_sql(), order.as_sql()))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let sql = format!("{}{} ORDER BY {}", base, where_clause, order_clause);
 
     let mut stmt = conn.prepare(&sql)?;
     let tasks: Vec<Task> = if let Some(p) = project {

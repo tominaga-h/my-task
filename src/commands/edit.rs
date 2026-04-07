@@ -177,7 +177,7 @@ fn run_interactive(id: Option<u32>, filter_project: Option<String>) {
             &conn,
             false,
             filter_project.as_deref(),
-            SortKey::Id,
+            &[SortKey::Id],
             SortOrder::default(),
         ) {
             Ok(t) => t,
