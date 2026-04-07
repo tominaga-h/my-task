@@ -1,10 +1,10 @@
 # my-task
 
+![version](https://img.shields.io/badge/version-1.0.0-blue)
+
 SQLiteベースのシンプルなCLIタスクマネージャー。
 
-[English](../README.md)
-
-> **本プロジェクトは開発中です。** 機能やCLIインターフェースは予告なく変更される場合があります。
+[English](../README.md) | [Changelog](CHANGELOG.md)
 
 ![DEMO](../images/demo-list-all.png)
 
