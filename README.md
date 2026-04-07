@@ -26,7 +26,16 @@ A simple CLI task manager powered by SQLite.
 
 ## Installation
 
-> **Note:** Currently only source installation is supported. A Rust toolchain is required.
+### Homebrew
+
+```bash
+brew tap tominaga-h/tap
+brew install tominaga-h/tap/my-task
+```
+
+### From source
+
+Requires a Rust toolchain.
 
 ```bash
 git clone https://github.com/mad-tmng/my-task.git
