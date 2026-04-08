@@ -1,6 +1,6 @@
 # my-task
 
-![version](https://img.shields.io/badge/version-1.0.0-blue)
+![version](https://img.shields.io/badge/version-1.3.0-blue)
 
 A simple CLI task manager powered by SQLite.
 
@@ -19,6 +19,9 @@ A simple CLI task manager powered by SQLite.
   - [List tasks](#list-tasks)
   - [Task statuses](#task-statuses)
   - [Notify due tasks](#notify-due-tasks)
+  - [Search tasks](#search-tasks)
+  - [Show task details](#show-task-details)
+  - [Important tasks](#important-tasks)
 - [Data storage](#data-storage)
 - [Claude Code Plugin](#claude-code-plugin)
 - [License](#license)
@@ -51,6 +54,7 @@ cargo install --path .
 my-task add "Buy groceries"
 my-task add "Fix login bug" --project my-app --due 2026-04-15
 my-task add "Write tests" --due tomorrow
+my-task add "Critical bug" --important
 ```
 
 ### Fuzzy due dates
@@ -101,6 +105,7 @@ my-task list --all           # Include done/closed tasks
 my-task list -P my-app       # Filter by project
 my-task list --sort due      # Sort by: id, due, project, created
 my-task list --sort project --sort due  # Multiple sort keys
+my-task list --important-only    # Important tasks only
 ```
 
 ![DEMO](./images/demo-list.png)
@@ -122,6 +127,34 @@ my-task notify --days 3     # Include tasks due within 3 days
 
 Shows overdue and upcoming tasks on stdout. Designed for use with cron / launchd.
 Silent (no output) when there are no matching tasks.
+
+### Search tasks
+
+```bash
+my-task search "bug"             # Search open tasks by keyword
+my-task search "bug" --all       # Include done/closed tasks
+my-task search "bug" -p my-app   # Combine with project filter
+```
+
+### Show task details
+
+```bash
+my-task show 1                   # Key-value format
+my-task show 1 --json            # JSON output
+```
+
+### Important tasks
+
+Mark tasks as important to highlight them in listings:
+
+```bash
+my-task add "Critical bug" --important
+my-task edit 5 --important       # Set important flag
+my-task edit 5 --no-important    # Remove important flag
+my-task list --important-only    # Filter important tasks only
+```
+
+Important tasks are displayed in **magenta bold** in list and notify output.
 
 ## Data storage
 
@@ -162,6 +195,7 @@ Add a new task.
 |--------|-------|-------------|
 | `--project <NAME>` | `-p` | Assign to a project |
 | `--due <DATE>` | `-d` | Set due date (YYYY-MM-DD or fuzzy input) |
+| `--important` | — | Mark task as important |
 
 - `<TITLE>` is required and must not be empty.
 - Output: `Added: #<ID> <TITLE>`
@@ -181,14 +215,17 @@ Edit an existing task. Two modes are available:
 
 #### Flag mode
 
-Requires `<ID>` and at least one of `--title`, `--project`, or `--due`.
+Requires `<ID>` and at least one of `--title`, `--project`, `--due`, `--important`, or `--no-important`.
 
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--title <TEXT>` | `-t` | Set new title (must not be empty) |
 | `--project <NAME>` | `-p` | Set new project name |
 | `--due <DATE>` | `-d` | Set new due date (YYYY-MM-DD or fuzzy input) |
+| `--important` | — | Set important flag |
+| `--no-important` | — | Remove important flag |
 
+- `--important` and `--no-important` cannot be used together.
 - Output: `Updated: #<ID> <TITLE>`
 - Exit code `1` if no flags given, task not found, or title is empty.
 
@@ -205,7 +242,7 @@ Opens `$EDITOR` (fallback: `vi`) with tasks in YAML format.
 - Deleting a task block in the editor **closes** that task (sets status to `closed`).
 - Only changed tasks are updated. Unchanged tasks are skipped.
 - Output: `Updated N tasks`, `Closed N tasks`, or `No changes`
-- `-i` cannot be combined with `--title`, `--project`, or `--due`.
+- `-i` cannot be combined with `--title`, `--project`, `--due`, `--important`, or `--no-important`.
 
 ### `my-task notify [OPTIONS]`
 
@@ -227,8 +264,10 @@ List tasks in a table. Alias: `my-task ls`
 | `--all` | `-a` | `false` | Show all tasks including done and closed |
 | `--project <NAME>` | `-P` | — | Filter by project name |
 | `--sort <KEY>` | `-s` | `id` | Sort by: `id`, `due`, `project`, `created` (`age` is alias for `created`). Repeatable for multi-key sort |
+| `--important-only` | — | `false` | Show only important tasks |
 
 **Display rules:**
+- Important tasks: title in magenta bold.
 - Open tasks: default colors. Overdue titles/due dates shown in red, due today in yellow, future due in green.
 - Done tasks: all columns in green (except project, which keeps its assigned color).
 - Closed tasks: all columns in dark grey.
@@ -236,3 +275,27 @@ List tasks in a table. Alias: `my-task ls`
 - Tasks with `--sort due`: tasks without a due date appear last.
 
 **Output footer:** `N tasks` or `N tasks (M done)`
+
+### `my-task search <KEYWORD> [OPTIONS]`
+
+Search tasks by title (partial match, case-insensitive for ASCII).
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--all` | `-a` | `false` | Include done and closed tasks |
+| `--project <NAME>` | `-p` | — | Filter by project name |
+
+- Results are displayed in the same table format as `list`.
+- Outputs `No tasks found for keyword: "..."` when no tasks match.
+
+### `my-task show <ID> [OPTIONS]`
+
+Show detailed information about a single task.
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--json` | — | Output as JSON |
+
+- Default output: key-value format (one field per line).
+- Fields: ID, Title, Status, Project, Due, Remind, Important, Created, Updated.
+- Exit code `1` if the task is not found.

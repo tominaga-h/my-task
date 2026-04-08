@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - 2026-04-08
+
+### Added
+
+- `search` コマンドを追加: タイトルの部分一致検索 (#62)
+- `show` コマンドを追加: タスクIDから詳細情報を逆引き表示 (#63)
+- `show --json` オプション: JSON形式で出力 (#63)
+- `--important` フラグ: タスクに重要マークを付与 (#61)
+- `--no-important` フラグ: 重要マークを解除 (#61)
+- `list --important-only` オプション: 重要タスクのみフィルタ (#61)
+- 重要タスクをマゼンタ太字で表示 (#61)
+
 ## [1.0.0](release/v1.0.0.md) - 2026-04-07
 
 ### Added
