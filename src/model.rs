@@ -14,6 +14,7 @@ pub struct Task {
     #[allow(dead_code)]
     pub updated: NaiveDate,
     pub reminds: Vec<NaiveDate>,
+    pub important: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -60,7 +61,6 @@ impl SortOrder {
 }
 
 impl Status {
-    #[allow(dead_code)]
     pub fn as_str(&self) -> &str {
         match self {
             Status::Open => "open",

@@ -7,7 +7,7 @@ use terminal_size::{terminal_size, Width};
 
 use crate::config;
 use crate::db;
-use crate::model::{SortKey, SortOrder, Status};
+use crate::model::{SortKey, SortOrder, Status, Task};
 
 const NARROW_THRESHOLD: u16 = 60;
 
@@ -32,6 +32,10 @@ pub struct ListArgs {
     /// Sort descending
     #[arg(long, conflicts_with = "asc")]
     pub desc: bool,
+
+    /// Show only important tasks
+    #[arg(long)]
+    pub important_only: bool,
 }
 
 pub fn run(args: ListArgs) {
@@ -68,7 +72,14 @@ pub fn run(args: ListArgs) {
         SortOrder::Asc
     };
 
-    let tasks = match db::list_tasks(&conn, args.all, args.project.as_deref(), &sorts, order) {
+    let tasks = match db::list_tasks(
+        &conn,
+        args.all,
+        args.project.as_deref(),
+        &sorts,
+        order,
+        args.important_only,
+    ) {
         Ok(t) => t,
         Err(_) => {
             eprintln!("Error: failed to read database: {}", db_path.display());
@@ -81,10 +92,14 @@ pub fn run(args: ListArgs) {
         return;
     }
 
+    print_task_table(&tasks, args.all, &conn);
+}
+
+pub fn print_task_table(tasks: &[Task], all: bool, conn: &rusqlite::Connection) {
     // Fill reminds for each task
-    let mut tasks = tasks;
+    let mut tasks = tasks.to_vec();
     for task in &mut tasks {
-        task.reminds = db::get_reminds_for_task(&conn, task.id).unwrap_or_default();
+        task.reminds = db::get_reminds_for_task(conn, task.id).unwrap_or_default();
     }
 
     let today = Local::now().date_naive();
@@ -167,7 +182,16 @@ pub fn run(args: ListArgs) {
             } else if is_closed {
                 Cell::new(&task.title).fg(Color::DarkGrey)
             } else if is_overdue {
-                Cell::new(&task.title).fg(Color::Red)
+                let cell = Cell::new(&task.title).fg(Color::Red);
+                if task.important {
+                    cell.add_attribute(Attribute::Bold)
+                } else {
+                    cell
+                }
+            } else if task.important {
+                Cell::new(&task.title)
+                    .fg(Color::Magenta)
+                    .add_attribute(Attribute::Bold)
             } else {
                 Cell::new(&task.title)
             };
@@ -216,7 +240,16 @@ pub fn run(args: ListArgs) {
             ]);
         } else {
             let title_cell = if is_overdue {
-                Cell::new(&task.title).fg(Color::Red)
+                let cell = Cell::new(&task.title).fg(Color::Red);
+                if task.important {
+                    cell.add_attribute(Attribute::Bold)
+                } else {
+                    cell
+                }
+            } else if task.important {
+                Cell::new(&task.title)
+                    .fg(Color::Magenta)
+                    .add_attribute(Attribute::Bold)
             } else {
                 Cell::new(&task.title)
             };
@@ -268,7 +301,7 @@ pub fn run(args: ListArgs) {
     println!("{table}");
 
     println!();
-    if args.all && done_count > 0 {
+    if all && done_count > 0 {
         println!("{} tasks ({} done)", tasks.len(), done_count);
     } else {
         println!("{} tasks", tasks.len());

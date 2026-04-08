@@ -21,6 +21,10 @@ pub struct AddArgs {
     /// Remind date (YYYY-MM-DD, 今日, 明日, 来週, 月曜〜日曜, etc.)
     #[arg(short, long)]
     pub remind: Option<String>,
+
+    /// Mark task as important
+    #[arg(long)]
+    pub important: bool,
 }
 
 pub fn run(args: AddArgs) {
@@ -49,7 +53,14 @@ pub fn run(args: AddArgs) {
     };
 
     let today = Local::now().date_naive();
-    let id = match db::add_task(&conn, &args.title, args.project.as_deref(), due, today) {
+    let id = match db::add_task(
+        &conn,
+        &args.title,
+        args.project.as_deref(),
+        due,
+        today,
+        args.important,
+    ) {
         Ok(id) => id,
         Err(_) => {
             eprintln!("Error: failed to write database: {}", db_path.display());
