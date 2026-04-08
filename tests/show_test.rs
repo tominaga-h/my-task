@@ -74,7 +74,35 @@ fn test_show_none_fields() {
         .success()
         .stdout(predicate::str::contains("Project: (none)"))
         .stdout(predicate::str::contains("Due: (none)"))
-        .stdout(predicate::str::contains("Remind: (none)"));
+        .stdout(predicate::str::contains("Remind: (none)"))
+        .stdout(predicate::str::contains("Important: no"));
+}
+
+#[test]
+fn test_show_multiple_reminds() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["add", "Multi remind task"])
+        .assert()
+        .success();
+
+    cmd(&db_path)
+        .args(["edit", "1", "-r", "2026-04-10"])
+        .assert()
+        .success();
+
+    cmd(&db_path)
+        .args(["edit", "1", "-r", "2026-04-15"])
+        .assert()
+        .success();
+
+    cmd(&db_path)
+        .args(["show", "1"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Remind: 2026-04-10, 2026-04-15"));
 }
 
 #[test]

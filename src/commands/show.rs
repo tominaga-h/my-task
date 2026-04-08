@@ -42,13 +42,12 @@ pub fn run(args: ShowArgs) {
     println!("ID: {}", task.id);
     println!("Title: {}", task.title);
     println!("Status: {}", task.status.as_str());
-    println!(
-        "Project: {}",
-        task.project.as_deref().unwrap_or("(none)")
-    );
+    println!("Project: {}", task.project.as_deref().unwrap_or("(none)"));
     println!(
         "Due: {}",
-        task.due.map(|d| d.to_string()).unwrap_or_else(|| "(none)".to_string())
+        task.due
+            .map(|d| d.to_string())
+            .unwrap_or_else(|| "(none)".to_string())
     );
     if reminds.is_empty() {
         println!("Remind: (none)");
