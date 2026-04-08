@@ -173,6 +173,55 @@ fn test_show_with_remind() {
 }
 
 #[test]
+fn test_show_json() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args([
+            "add",
+            "JSON task",
+            "-p",
+            "myproj",
+            "-d",
+            "2026-05-01",
+            "--important",
+        ])
+        .assert()
+        .success();
+
+    let output = cmd(&db_path)
+        .args(["show", "1", "--json"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("\"id\":1"));
+    assert!(stdout.contains("\"title\":\"JSON task\""));
+    assert!(stdout.contains("\"status\":\"open\""));
+    assert!(stdout.contains("\"project\":\"myproj\""));
+    assert!(stdout.contains("\"due\":\"2026-05-01\""));
+    assert!(stdout.contains("\"important\":true"));
+    assert!(stdout.contains("\"remind\":[]"));
+}
+
+#[test]
+fn test_show_json_null_fields() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path).args(["add", "Simple"]).assert().success();
+
+    let output = cmd(&db_path)
+        .args(["show", "1", "--json"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("\"project\":null"));
+    assert!(stdout.contains("\"due\":null"));
+    assert!(stdout.contains("\"important\":false"));
+}
+
+#[test]
 fn test_show_no_args() {
     let tmp = TempDir::new().unwrap();
     let db_path = tmp.path().join("tasks.db");
