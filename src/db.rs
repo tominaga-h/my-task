@@ -287,6 +287,38 @@ pub fn delete_reminds_for_task(conn: &Connection, task_id: u32) -> Result<(), ru
     Ok(())
 }
 
+pub fn search_tasks(
+    conn: &Connection,
+    keyword: &str,
+    all: bool,
+    project: Option<&str>,
+) -> Result<Vec<Task>, rusqlite::Error> {
+    let base =
+        "SELECT id, title, status, source, project, due, done_at, created, updated, important FROM tasks";
+    let mut conditions = vec!["title LIKE ?1".to_string()];
+    let like_pattern = format!("%{}%", keyword);
+
+    if !all {
+        conditions.push("status = 'open'".to_string());
+    }
+    if project.is_some() {
+        conditions.push("project = ?2".to_string());
+    }
+
+    let where_clause = format!(" WHERE {}", conditions.join(" AND "));
+    let sql = format!("{}{} ORDER BY id ASC", base, where_clause);
+
+    let mut stmt = conn.prepare(&sql)?;
+    let tasks: Vec<Task> = if let Some(p) = project {
+        stmt.query_map(params![like_pattern, p], row_to_task)?
+            .collect::<Result<Vec<_>, _>>()?
+    } else {
+        stmt.query_map(params![like_pattern], row_to_task)?
+            .collect::<Result<Vec<_>, _>>()?
+    };
+    Ok(tasks)
+}
+
 fn parse_date(s: &str) -> NaiveDate {
     NaiveDate::parse_from_str(s, "%Y-%m-%d").expect("invalid date in database")
 }
@@ -612,6 +644,82 @@ mod tests {
         assert_eq!(tasks.len(), 1);
         assert_eq!(tasks[0].title, "Important");
         assert!(tasks[0].important);
+    }
+
+    #[test]
+    fn test_search_tasks_by_keyword() {
+        let conn = open_in_memory().unwrap();
+        let t = today();
+        add_task(&conn, "Buy groceries", None, None, t, false).unwrap();
+        add_task(&conn, "Write report", None, None, t, false).unwrap();
+        add_task(&conn, "Buy flowers", None, None, t, false).unwrap();
+
+        let tasks = search_tasks(&conn, "Buy", false, None).unwrap();
+        assert_eq!(tasks.len(), 2);
+        assert_eq!(tasks[0].title, "Buy groceries");
+        assert_eq!(tasks[1].title, "Buy flowers");
+    }
+
+    #[test]
+    fn test_search_tasks_open_only() {
+        let conn = open_in_memory().unwrap();
+        let t = today();
+        let id1 = add_task(&conn, "Open task match", None, None, t, false).unwrap();
+        let _ = id1;
+        let id2 = add_task(&conn, "Done task match", None, None, t, false).unwrap();
+        complete_task(&conn, id2, t).unwrap();
+
+        let tasks = search_tasks(&conn, "match", false, None).unwrap();
+        assert_eq!(tasks.len(), 1);
+        assert_eq!(tasks[0].title, "Open task match");
+    }
+
+    #[test]
+    fn test_search_tasks_all() {
+        let conn = open_in_memory().unwrap();
+        let t = today();
+        add_task(&conn, "Open task match", None, None, t, false).unwrap();
+        let id2 = add_task(&conn, "Done task match", None, None, t, false).unwrap();
+        complete_task(&conn, id2, t).unwrap();
+
+        let tasks = search_tasks(&conn, "match", true, None).unwrap();
+        assert_eq!(tasks.len(), 2);
+    }
+
+    #[test]
+    fn test_search_tasks_with_project() {
+        let conn = open_in_memory().unwrap();
+        let t = today();
+        add_task(&conn, "Task alpha", Some("alpha"), None, t, false).unwrap();
+        add_task(&conn, "Task beta", Some("beta"), None, t, false).unwrap();
+        add_task(&conn, "Task alpha2", Some("alpha"), None, t, false).unwrap();
+
+        let tasks = search_tasks(&conn, "Task", false, Some("alpha")).unwrap();
+        assert_eq!(tasks.len(), 2);
+        assert_eq!(tasks[0].title, "Task alpha");
+        assert_eq!(tasks[1].title, "Task alpha2");
+    }
+
+    #[test]
+    fn test_search_tasks_no_match() {
+        let conn = open_in_memory().unwrap();
+        let t = today();
+        add_task(&conn, "Some task", None, None, t, false).unwrap();
+
+        let tasks = search_tasks(&conn, "nonexistent", false, None).unwrap();
+        assert!(tasks.is_empty());
+    }
+
+    #[test]
+    fn test_search_tasks_case_insensitive() {
+        let conn = open_in_memory().unwrap();
+        let t = today();
+        add_task(&conn, "Buy Milk", None, None, t, false).unwrap();
+        add_task(&conn, "buy bread", None, None, t, false).unwrap();
+
+        // SQLite LIKE is case-insensitive for ASCII by default
+        let tasks = search_tasks(&conn, "buy", false, None).unwrap();
+        assert_eq!(tasks.len(), 2);
     }
 
     #[test]
