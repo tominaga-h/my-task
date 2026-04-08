@@ -32,6 +32,10 @@ pub struct ListArgs {
     /// Sort descending
     #[arg(long, conflicts_with = "asc")]
     pub desc: bool,
+
+    /// Show only important tasks
+    #[arg(long)]
+    pub important_only: bool,
 }
 
 pub fn run(args: ListArgs) {
@@ -68,7 +72,14 @@ pub fn run(args: ListArgs) {
         SortOrder::Asc
     };
 
-    let tasks = match db::list_tasks(&conn, args.all, args.project.as_deref(), &sorts, order) {
+    let tasks = match db::list_tasks(
+        &conn,
+        args.all,
+        args.project.as_deref(),
+        &sorts,
+        order,
+        args.important_only,
+    ) {
         Ok(t) => t,
         Err(_) => {
             eprintln!("Error: failed to read database: {}", db_path.display());
@@ -167,9 +178,19 @@ pub fn run(args: ListArgs) {
             } else if is_closed {
                 Cell::new(&task.title).fg(Color::DarkGrey)
             } else if is_overdue {
-                Cell::new(&task.title).fg(Color::Red)
+                let cell = Cell::new(&task.title).fg(Color::Red);
+                if task.important {
+                    cell.add_attribute(Attribute::Bold)
+                } else {
+                    cell
+                }
             } else {
-                Cell::new(&task.title)
+                let cell = Cell::new(&task.title);
+                if task.important {
+                    cell.add_attribute(Attribute::Bold)
+                } else {
+                    cell
+                }
             };
 
             let due_cell = if is_inactive {
@@ -216,9 +237,19 @@ pub fn run(args: ListArgs) {
             ]);
         } else {
             let title_cell = if is_overdue {
-                Cell::new(&task.title).fg(Color::Red)
+                let cell = Cell::new(&task.title).fg(Color::Red);
+                if task.important {
+                    cell.add_attribute(Attribute::Bold)
+                } else {
+                    cell
+                }
             } else {
-                Cell::new(&task.title)
+                let cell = Cell::new(&task.title);
+                if task.important {
+                    cell.add_attribute(Attribute::Bold)
+                } else {
+                    cell
+                }
             };
 
             let due_cell = if is_overdue {

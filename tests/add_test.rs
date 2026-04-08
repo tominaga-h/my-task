@@ -211,3 +211,43 @@ fn test_add_empty_title() {
         .failure()
         .stderr(predicate::str::contains("Error: title cannot be empty"));
 }
+
+#[test]
+fn test_add_with_important() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["add", "Important task", "--important"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Added: #1 Important task"));
+
+    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    let important: i32 = conn
+        .query_row("SELECT important FROM tasks WHERE id = 1", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(important, 1);
+}
+
+#[test]
+fn test_add_without_important() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["add", "Normal task"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Added: #1 Normal task"));
+
+    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    let important: i32 = conn
+        .query_row("SELECT important FROM tasks WHERE id = 1", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(important, 0);
+}
