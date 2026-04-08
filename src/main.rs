@@ -28,6 +28,8 @@ enum Commands {
     List(commands::list::ListArgs),
     /// Show overdue and due-soon tasks
     Notify(commands::notify::NotifyArgs),
+    /// Show task details
+    Show(commands::show::ShowArgs),
 }
 
 fn main() {
@@ -39,5 +41,6 @@ fn main() {
         Commands::Edit(args) => commands::edit::run(args),
         Commands::List(args) => commands::list::run(args),
         Commands::Notify(args) => commands::notify::run(args),
+        Commands::Show(args) => commands::show::run(args),
     }
 }
