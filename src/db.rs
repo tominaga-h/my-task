@@ -12,15 +12,16 @@ pub fn open(path: &Path) -> Result<Connection, rusqlite::Error> {
     conn.execute_batch("PRAGMA journal_mode=WAL;")?;
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS tasks (
-            id      INTEGER PRIMARY KEY AUTOINCREMENT,
-            title   TEXT    NOT NULL,
-            status  TEXT    NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'done', 'closed')),
-            source  TEXT    NOT NULL DEFAULT 'private',
-            project TEXT,
-            due     TEXT,
-            done_at TEXT,
-            created TEXT    NOT NULL,
-            updated TEXT    NOT NULL
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            title     TEXT    NOT NULL,
+            status    TEXT    NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'done', 'closed')),
+            source    TEXT    NOT NULL DEFAULT 'private',
+            project   TEXT,
+            due       TEXT,
+            done_at   TEXT,
+            created   TEXT    NOT NULL,
+            updated   TEXT    NOT NULL,
+            important INTEGER NOT NULL DEFAULT 0
         );",
     )?;
     conn.execute_batch(
@@ -32,6 +33,8 @@ pub fn open(path: &Path) -> Result<Connection, rusqlite::Error> {
     )?;
     // Migrate: add 'closed' to CHECK constraint for existing databases
     migrate_status_check(&conn)?;
+    // Migrate: add 'important' column for existing databases
+    migrate_important(&conn)?;
     Ok(conn)
 }
 
@@ -65,26 +68,40 @@ fn migrate_status_check(conn: &Connection) -> Result<(), rusqlite::Error> {
     Ok(())
 }
 
+fn migrate_important(conn: &Connection) -> Result<(), rusqlite::Error> {
+    let sql: String = conn.query_row(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='tasks'",
+        [],
+        |row| row.get(0),
+    )?;
+    if sql.contains("important") {
+        return Ok(());
+    }
+    conn.execute_batch("ALTER TABLE tasks ADD COLUMN important INTEGER NOT NULL DEFAULT 0")?;
+    Ok(())
+}
+
 pub fn add_task(
     conn: &Connection,
     title: &str,
     project: Option<&str>,
     due: Option<NaiveDate>,
     today: NaiveDate,
+    important: bool,
 ) -> Result<u32, rusqlite::Error> {
     let today_str = today.to_string();
     let due_str = due.map(|d| d.to_string());
     conn.execute(
-        "INSERT INTO tasks (title, source, project, due, created, updated)
-         VALUES (?1, 'private', ?2, ?3, ?4, ?4)",
-        params![title, project, due_str, today_str],
+        "INSERT INTO tasks (title, source, project, due, created, updated, important)
+         VALUES (?1, 'private', ?2, ?3, ?4, ?4, ?5)",
+        params![title, project, due_str, today_str, important as i32],
     )?;
     Ok(conn.last_insert_rowid() as u32)
 }
 
 pub fn find_task(conn: &Connection, id: u32) -> Result<Option<Task>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT id, title, status, source, project, due, done_at, created, updated
+        "SELECT id, title, status, source, project, due, done_at, created, updated, important
          FROM tasks WHERE id = ?1",
     )?;
     let mut rows = stmt.query_map(params![id], row_to_task)?;
@@ -115,15 +132,19 @@ pub fn list_tasks(
     project: Option<&str>,
     sorts: &[SortKey],
     order: SortOrder,
+    important_only: bool,
 ) -> Result<Vec<Task>, rusqlite::Error> {
     let base =
-        "SELECT id, title, status, source, project, due, done_at, created, updated FROM tasks";
+        "SELECT id, title, status, source, project, due, done_at, created, updated, important FROM tasks";
     let mut conditions = Vec::new();
     if !all {
         conditions.push("status = 'open'");
     }
     if project.is_some() {
         conditions.push("project = ?1");
+    }
+    if important_only {
+        conditions.push("important = 1");
     }
     let where_clause = if conditions.is_empty() {
         String::new()
@@ -155,43 +176,38 @@ pub fn update_task(
     project: Option<&str>,
     due: Option<NaiveDate>,
     today: NaiveDate,
+    important: Option<bool>,
 ) -> Result<(), rusqlite::Error> {
     let today_str = today.to_string();
-    let mut sets = vec!["updated = ?1"];
+    let mut sets: Vec<String> = vec!["updated = ?1".to_string()];
     let mut param_idx = 2u32;
     let mut values: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(today_str)];
 
     if let Some(t) = title {
-        sets.push("title = ?2");
+        sets.push(format!("title = ?{}", param_idx));
         values.push(Box::new(t.to_string()));
-        param_idx = 3;
+        param_idx += 1;
     }
     if let Some(p) = project {
-        let placeholder = if param_idx == 2 { "?2" } else { "?3" };
-        sets.push(if placeholder == "?2" {
-            "project = ?2"
-        } else {
-            "project = ?3"
-        });
+        sets.push(format!("project = ?{}", param_idx));
         values.push(Box::new(p.to_string()));
         param_idx += 1;
     }
     if let Some(d) = due {
-        let placeholder = match param_idx {
-            2 => "due = ?2",
-            3 => "due = ?3",
-            _ => "due = ?4",
-        };
-        sets.push(placeholder);
+        sets.push(format!("due = ?{}", param_idx));
         values.push(Box::new(d.to_string()));
         param_idx += 1;
     }
+    if let Some(imp) = important {
+        sets.push(format!("important = ?{}", param_idx));
+        values.push(Box::new(imp as i32));
+        param_idx += 1;
+    }
 
-    let id_placeholder = format!("?{}", param_idx);
     let sql = format!(
-        "UPDATE tasks SET {} WHERE id = {}",
+        "UPDATE tasks SET {} WHERE id = ?{}",
         sets.join(", "),
-        id_placeholder
+        param_idx
     );
     values.push(Box::new(id));
 
@@ -206,7 +222,7 @@ pub fn get_due_tasks(
 ) -> Result<Vec<Task>, rusqlite::Error> {
     let target_str = target_date.to_string();
     let mut stmt = conn.prepare(
-        "SELECT id, title, status, source, project, due, done_at, created, updated
+        "SELECT id, title, status, source, project, due, done_at, created, updated, important
          FROM tasks
          WHERE status = 'open' AND due IS NOT NULL AND due <= ?1
          ORDER BY due ASC",
@@ -251,7 +267,7 @@ pub fn get_tasks_with_remind_today(
 ) -> Result<Vec<Task>, rusqlite::Error> {
     let today_str = today.to_string();
     let mut stmt = conn.prepare(
-        "SELECT DISTINCT t.id, t.title, t.status, t.source, t.project, t.due, t.done_at, t.created, t.updated
+        "SELECT DISTINCT t.id, t.title, t.status, t.source, t.project, t.due, t.done_at, t.created, t.updated, t.important
          FROM tasks t
          JOIN task_reminds r ON t.id = r.task_id
          WHERE t.status = 'open' AND r.remind_at = ?1
@@ -285,6 +301,7 @@ fn row_to_task(row: &rusqlite::Row) -> Result<Task, rusqlite::Error> {
     let done_at_str: Option<String> = row.get(6)?;
     let created_str: String = row.get(7)?;
     let updated_str: String = row.get(8)?;
+    let important_int: i32 = row.get(9)?;
 
     Ok(Task {
         id,
@@ -297,6 +314,7 @@ fn row_to_task(row: &rusqlite::Row) -> Result<Task, rusqlite::Error> {
         created: parse_date(&created_str),
         updated: parse_date(&updated_str),
         reminds: Vec::new(),
+        important: important_int != 0,
     })
 }
 
@@ -309,15 +327,16 @@ mod tests {
         let conn = Connection::open_in_memory()?;
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS tasks (
-                id      INTEGER PRIMARY KEY AUTOINCREMENT,
-                title   TEXT    NOT NULL,
-                status  TEXT    NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'done', 'closed')),
-                source  TEXT    NOT NULL DEFAULT 'private',
-                project TEXT,
-                due     TEXT,
-                done_at TEXT,
-                created TEXT    NOT NULL,
-                updated TEXT    NOT NULL
+                id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                title     TEXT    NOT NULL,
+                status    TEXT    NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'done', 'closed')),
+                source    TEXT    NOT NULL DEFAULT 'private',
+                project   TEXT,
+                due       TEXT,
+                done_at   TEXT,
+                created   TEXT    NOT NULL,
+                updated   TEXT    NOT NULL,
+                important INTEGER NOT NULL DEFAULT 0
             );
             CREATE TABLE IF NOT EXISTS task_reminds (
                 id       INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -348,7 +367,7 @@ mod tests {
     #[test]
     fn test_add_and_find() {
         let conn = open_in_memory().unwrap();
-        let id = add_task(&conn, "Test task", Some("myproject"), None, today()).unwrap();
+        let id = add_task(&conn, "Test task", Some("myproject"), None, today(), false).unwrap();
         let task = find_task(&conn, id).unwrap().expect("task should exist");
         assert_eq!(task.title, "Test task");
         assert_eq!(task.project, Some("myproject".to_string()));
@@ -359,7 +378,7 @@ mod tests {
     #[test]
     fn test_complete_task() {
         let conn = open_in_memory().unwrap();
-        let id = add_task(&conn, "Complete me", None, None, today()).unwrap();
+        let id = add_task(&conn, "Complete me", None, None, today(), false).unwrap();
         complete_task(&conn, id, today()).unwrap();
         let task = find_task(&conn, id).unwrap().expect("task should exist");
         assert_eq!(task.status, Status::Done);
@@ -369,8 +388,8 @@ mod tests {
     #[test]
     fn test_update_task_title() {
         let conn = open_in_memory().unwrap();
-        let id = add_task(&conn, "Old title", None, None, today()).unwrap();
-        update_task(&conn, id, Some("New title"), None, None, today()).unwrap();
+        let id = add_task(&conn, "Old title", None, None, today(), false).unwrap();
+        update_task(&conn, id, Some("New title"), None, None, today(), None).unwrap();
         let task = find_task(&conn, id).unwrap().expect("task should exist");
         assert_eq!(task.title, "New title");
     }
@@ -379,8 +398,17 @@ mod tests {
     fn test_update_task_multiple_fields() {
         let conn = open_in_memory().unwrap();
         let due = NaiveDate::from_ymd_opt(2026, 5, 1).unwrap();
-        let id = add_task(&conn, "Task", None, None, today()).unwrap();
-        update_task(&conn, id, Some("Updated"), Some("proj"), Some(due), today()).unwrap();
+        let id = add_task(&conn, "Task", None, None, today(), false).unwrap();
+        update_task(
+            &conn,
+            id,
+            Some("Updated"),
+            Some("proj"),
+            Some(due),
+            today(),
+            None,
+        )
+        .unwrap();
         let task = find_task(&conn, id).unwrap().expect("task should exist");
         assert_eq!(task.title, "Updated");
         assert_eq!(task.project, Some("proj".to_string()));
@@ -390,7 +418,7 @@ mod tests {
     #[test]
     fn test_close_task() {
         let conn = open_in_memory().unwrap();
-        let id = add_task(&conn, "Close me", None, None, today()).unwrap();
+        let id = add_task(&conn, "Close me", None, None, today(), false).unwrap();
         close_task(&conn, id, today()).unwrap();
         let task = find_task(&conn, id).unwrap().expect("task should exist");
         assert_eq!(task.status, Status::Closed);
@@ -410,10 +438,10 @@ mod tests {
         let past = NaiveDate::from_ymd_opt(2026, 3, 28).unwrap();
         let future = NaiveDate::from_ymd_opt(2026, 5, 1).unwrap();
 
-        add_task(&conn, "Overdue", None, Some(past), t).unwrap();
-        add_task(&conn, "Due today", None, Some(t), t).unwrap();
-        add_task(&conn, "Future", None, Some(future), t).unwrap();
-        add_task(&conn, "No due", None, None, t).unwrap();
+        add_task(&conn, "Overdue", None, Some(past), t, false).unwrap();
+        add_task(&conn, "Due today", None, Some(t), t, false).unwrap();
+        add_task(&conn, "Future", None, Some(future), t, false).unwrap();
+        add_task(&conn, "No due", None, None, t, false).unwrap();
 
         let tasks = get_due_tasks(&conn, t).unwrap();
         assert_eq!(tasks.len(), 2);
@@ -426,11 +454,11 @@ mod tests {
         let conn = open_in_memory().unwrap();
         let t = today();
 
-        let id1 = add_task(&conn, "Done task", None, Some(t), t).unwrap();
+        let id1 = add_task(&conn, "Done task", None, Some(t), t, false).unwrap();
         complete_task(&conn, id1, t).unwrap();
-        let id2 = add_task(&conn, "Closed task", None, Some(t), t).unwrap();
+        let id2 = add_task(&conn, "Closed task", None, Some(t), t, false).unwrap();
         close_task(&conn, id2, t).unwrap();
-        add_task(&conn, "Open task", None, Some(t), t).unwrap();
+        add_task(&conn, "Open task", None, Some(t), t, false).unwrap();
 
         let tasks = get_due_tasks(&conn, t).unwrap();
         assert_eq!(tasks.len(), 1);
@@ -442,7 +470,7 @@ mod tests {
         let conn = open_in_memory().unwrap();
         let t = today();
 
-        add_task(&conn, "No due", None, None, t).unwrap();
+        add_task(&conn, "No due", None, None, t, false).unwrap();
 
         let tasks = get_due_tasks(&conn, t).unwrap();
         assert!(tasks.is_empty());
@@ -452,7 +480,7 @@ mod tests {
     fn test_add_and_get_reminds() {
         let conn = open_in_memory().unwrap();
         let t = today();
-        let id = add_task(&conn, "Remind me", None, None, t).unwrap();
+        let id = add_task(&conn, "Remind me", None, None, t, false).unwrap();
 
         let r1 = NaiveDate::from_ymd_opt(2026, 4, 10).unwrap();
         let r2 = NaiveDate::from_ymd_opt(2026, 4, 15).unwrap();
@@ -469,7 +497,7 @@ mod tests {
     fn test_get_reminds_empty() {
         let conn = open_in_memory().unwrap();
         let t = today();
-        let id = add_task(&conn, "No remind", None, None, t).unwrap();
+        let id = add_task(&conn, "No remind", None, None, t, false).unwrap();
 
         let reminds = get_reminds_for_task(&conn, id).unwrap();
         assert!(reminds.is_empty());
@@ -480,14 +508,14 @@ mod tests {
         let conn = open_in_memory().unwrap();
         let t = today();
 
-        let id1 = add_task(&conn, "Remind today", None, None, t).unwrap();
+        let id1 = add_task(&conn, "Remind today", None, None, t, false).unwrap();
         add_remind(&conn, id1, t).unwrap();
 
         let tomorrow = NaiveDate::from_ymd_opt(2026, 4, 1).unwrap();
-        let id2 = add_task(&conn, "Remind tomorrow", None, None, t).unwrap();
+        let id2 = add_task(&conn, "Remind tomorrow", None, None, t, false).unwrap();
         add_remind(&conn, id2, tomorrow).unwrap();
 
-        let id3 = add_task(&conn, "No remind", None, None, t).unwrap();
+        let id3 = add_task(&conn, "No remind", None, None, t, false).unwrap();
         let _ = id3;
 
         let tasks = get_tasks_with_remind_today(&conn, t).unwrap();
@@ -500,15 +528,15 @@ mod tests {
         let conn = open_in_memory().unwrap();
         let t = today();
 
-        let id1 = add_task(&conn, "Done task", None, None, t).unwrap();
+        let id1 = add_task(&conn, "Done task", None, None, t, false).unwrap();
         add_remind(&conn, id1, t).unwrap();
         complete_task(&conn, id1, t).unwrap();
 
-        let id2 = add_task(&conn, "Closed task", None, None, t).unwrap();
+        let id2 = add_task(&conn, "Closed task", None, None, t, false).unwrap();
         add_remind(&conn, id2, t).unwrap();
         close_task(&conn, id2, t).unwrap();
 
-        let id3 = add_task(&conn, "Open task", None, None, t).unwrap();
+        let id3 = add_task(&conn, "Open task", None, None, t, false).unwrap();
         add_remind(&conn, id3, t).unwrap();
 
         let tasks = get_tasks_with_remind_today(&conn, t).unwrap();
@@ -520,11 +548,80 @@ mod tests {
     fn test_delete_reminds_for_task() {
         let conn = open_in_memory().unwrap();
         let t = today();
-        let id = add_task(&conn, "Task", None, None, t).unwrap();
+        let id = add_task(&conn, "Task", None, None, t, false).unwrap();
         add_remind(&conn, id, t).unwrap();
 
         delete_reminds_for_task(&conn, id).unwrap();
         let reminds = get_reminds_for_task(&conn, id).unwrap();
         assert!(reminds.is_empty());
+    }
+
+    #[test]
+    fn test_add_task_with_important_true() {
+        let conn = open_in_memory().unwrap();
+        let id = add_task(&conn, "Important task", None, None, today(), true).unwrap();
+        let task = find_task(&conn, id).unwrap().expect("task should exist");
+        assert!(task.important);
+    }
+
+    #[test]
+    fn test_add_task_with_important_false() {
+        let conn = open_in_memory().unwrap();
+        let id = add_task(&conn, "Normal task", None, None, today(), false).unwrap();
+        let task = find_task(&conn, id).unwrap().expect("task should exist");
+        assert!(!task.important);
+    }
+
+    #[test]
+    fn test_update_task_important() {
+        let conn = open_in_memory().unwrap();
+        let id = add_task(&conn, "Task", None, None, today(), false).unwrap();
+        update_task(&conn, id, None, None, None, today(), Some(true)).unwrap();
+        let task = find_task(&conn, id).unwrap().expect("task should exist");
+        assert!(task.important);
+    }
+
+    #[test]
+    fn test_update_task_remove_important() {
+        let conn = open_in_memory().unwrap();
+        let id = add_task(&conn, "Task", None, None, today(), true).unwrap();
+        update_task(&conn, id, None, None, None, today(), Some(false)).unwrap();
+        let task = find_task(&conn, id).unwrap().expect("task should exist");
+        assert!(!task.important);
+    }
+
+    #[test]
+    fn test_update_task_important_none_unchanged() {
+        let conn = open_in_memory().unwrap();
+        let id = add_task(&conn, "Task", None, None, today(), true).unwrap();
+        update_task(&conn, id, Some("New title"), None, None, today(), None).unwrap();
+        let task = find_task(&conn, id).unwrap().expect("task should exist");
+        assert_eq!(task.title, "New title");
+        assert!(task.important);
+    }
+
+    #[test]
+    fn test_list_tasks_important_only() {
+        let conn = open_in_memory().unwrap();
+        let t = today();
+        add_task(&conn, "Normal", None, None, t, false).unwrap();
+        add_task(&conn, "Important", None, None, t, true).unwrap();
+        add_task(&conn, "Also normal", None, None, t, false).unwrap();
+
+        let tasks = list_tasks(&conn, false, None, &[SortKey::Id], SortOrder::Asc, true).unwrap();
+        assert_eq!(tasks.len(), 1);
+        assert_eq!(tasks[0].title, "Important");
+        assert!(tasks[0].important);
+    }
+
+    #[test]
+    fn test_list_tasks_important_only_false() {
+        let conn = open_in_memory().unwrap();
+        let t = today();
+        add_task(&conn, "Normal", None, None, t, false).unwrap();
+        add_task(&conn, "Important", None, None, t, true).unwrap();
+
+        let tasks = list_tasks(&conn, false, None, &[SortKey::Id], SortOrder::Asc, false).unwrap();
+        assert_eq!(tasks.len(), 2);
     }
 }

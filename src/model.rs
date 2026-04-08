@@ -14,6 +14,7 @@ pub struct Task {
     #[allow(dead_code)]
     pub updated: NaiveDate,
     pub reminds: Vec<NaiveDate>,
+    pub important: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]

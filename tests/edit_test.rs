@@ -221,3 +221,63 @@ fn test_edit_no_flags() {
             "specify at least one field to edit",
         ));
 }
+
+#[test]
+fn test_edit_set_important() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path).args(["add", "Task"]).assert().success();
+
+    cmd(&db_path)
+        .args(["edit", "1", "--important"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Updated: #1"));
+
+    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    let important: i32 = conn
+        .query_row("SELECT important FROM tasks WHERE id = 1", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(important, 1);
+}
+
+#[test]
+fn test_edit_unset_important() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["add", "Task", "--important"])
+        .assert()
+        .success();
+
+    cmd(&db_path)
+        .args(["edit", "1", "--no-important"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Updated: #1"));
+
+    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    let important: i32 = conn
+        .query_row("SELECT important FROM tasks WHERE id = 1", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(important, 0);
+}
+
+#[test]
+fn test_edit_important_conflict() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path).args(["add", "Task"]).assert().success();
+
+    cmd(&db_path)
+        .args(["edit", "1", "--important", "--no-important"])
+        .assert()
+        .failure();
+}

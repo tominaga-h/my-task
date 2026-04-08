@@ -85,9 +85,19 @@ pub fn run(args: NotifyArgs) {
             let project_text = task.project.as_deref().unwrap_or_default();
             let project_cell = Cell::new(project_text);
             let title_cell = if diff < 0 {
-                Cell::new(&task.title).fg(Color::Red)
+                let cell = Cell::new(&task.title).fg(Color::Red);
+                if task.important {
+                    cell.add_attribute(Attribute::Bold)
+                } else {
+                    cell
+                }
             } else {
-                Cell::new(&task.title)
+                let cell = Cell::new(&task.title);
+                if task.important {
+                    cell.add_attribute(Attribute::Bold)
+                } else {
+                    cell
+                }
             };
             let due_cell = if diff < 0 {
                 Cell::new(&due_label).fg(Color::Red)
@@ -140,7 +150,11 @@ pub fn run(args: NotifyArgs) {
             let id_cell = Cell::new(format!("#{}", task.id)).fg(Color::Cyan);
             let project_text = task.project.as_deref().unwrap_or_default();
             let project_cell = Cell::new(project_text);
-            let title_cell = Cell::new(&task.title);
+            let title_cell = if task.important {
+                Cell::new(&task.title).add_attribute(Attribute::Bold)
+            } else {
+                Cell::new(&task.title)
+            };
             let remind_cell = Cell::new(&remind_label).fg(Color::Yellow);
 
             table.add_row(vec![id_cell, project_cell, title_cell, remind_cell]);

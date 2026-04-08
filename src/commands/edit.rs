@@ -29,6 +29,14 @@ pub struct EditArgs {
     #[arg(short, long)]
     pub remind: Option<String>,
 
+    /// Mark task as important
+    #[arg(long)]
+    pub important: bool,
+
+    /// Remove important flag
+    #[arg(long, conflicts_with = "important")]
+    pub no_important: bool,
+
     /// Open in editor (like git rebase -i)
     #[arg(short = 'i', long)]
     pub interactive: bool,
@@ -44,9 +52,11 @@ pub fn run(args: EditArgs) {
             || args.project.is_some()
             || args.due.is_some()
             || args.remind.is_some()
+            || args.important
+            || args.no_important
         {
             eprintln!(
-                "Error: --interactive cannot be used with --title, --project, --due, --remind"
+                "Error: --interactive cannot be used with --title, --project, --due, --remind, --important, --no-important"
             );
             std::process::exit(1);
         }
@@ -65,10 +75,15 @@ fn run_flag(args: EditArgs) {
         }
     };
 
-    if args.title.is_none() && args.project.is_none() && args.due.is_none() && args.remind.is_none()
+    if args.title.is_none()
+        && args.project.is_none()
+        && args.due.is_none()
+        && args.remind.is_none()
+        && !args.important
+        && !args.no_important
     {
         eprintln!(
-            "Error: specify at least one field to edit (--title, --project, --due, --remind)"
+            "Error: specify at least one field to edit (--title, --project, --due, --remind, --important, --no-important)"
         );
         std::process::exit(1);
     }
@@ -123,8 +138,16 @@ fn run_flag(args: EditArgs) {
 
     let today = Local::now().date_naive();
 
+    let important = if args.important {
+        Some(true)
+    } else if args.no_important {
+        Some(false)
+    } else {
+        None
+    };
+
     // Only call update_task if there are task field changes
-    if (args.title.is_some() || args.project.is_some() || due.is_some())
+    if (args.title.is_some() || args.project.is_some() || due.is_some() || important.is_some())
         && db::update_task(
             &conn,
             id,
@@ -132,6 +155,7 @@ fn run_flag(args: EditArgs) {
             args.project.as_deref(),
             due,
             today,
+            important,
         )
         .is_err()
     {
@@ -179,6 +203,7 @@ fn run_interactive(id: Option<u32>, filter_project: Option<String>) {
             filter_project.as_deref(),
             &[SortKey::Id],
             SortOrder::default(),
+            false,
         ) {
             Ok(t) => t,
             Err(_) => {
@@ -266,8 +291,14 @@ fn run_interactive(id: Option<u32>, filter_project: Option<String>) {
         let project_changed = entry.project != orig.project;
         let due_changed = entry.due != orig.due;
         let reminds_changed = entry.reminds != orig.reminds;
+        let important_changed = entry.important != orig.important;
 
-        if !title_changed && !project_changed && !due_changed && !reminds_changed {
+        if !title_changed
+            && !project_changed
+            && !due_changed
+            && !reminds_changed
+            && !important_changed
+        {
             continue;
         }
 
@@ -276,7 +307,7 @@ fn run_interactive(id: Option<u32>, filter_project: Option<String>) {
             std::process::exit(1);
         }
 
-        if title_changed || project_changed || due_changed {
+        if title_changed || project_changed || due_changed || important_changed {
             let new_title = if title_changed {
                 Some(entry.title.as_str())
             } else {
@@ -288,8 +319,23 @@ fn run_interactive(id: Option<u32>, filter_project: Option<String>) {
                 None
             };
             let new_due = if due_changed { entry.due } else { None };
+            let new_important = if important_changed {
+                Some(entry.important)
+            } else {
+                None
+            };
 
-            if db::update_task(&conn, entry.id, new_title, new_project, new_due, today).is_err() {
+            if db::update_task(
+                &conn,
+                entry.id,
+                new_title,
+                new_project,
+                new_due,
+                today,
+                new_important,
+            )
+            .is_err()
+            {
                 eprintln!("Error: failed to update task #{}", entry.id);
                 std::process::exit(1);
             }
@@ -345,6 +391,7 @@ fn tasks_to_yaml(tasks: &[Task]) -> String {
         ));
         let remind_str: Vec<String> = task.reminds.iter().map(|d| d.to_string()).collect();
         out.push_str(&format!("  remind: {}\n", remind_str.join(", ")));
+        out.push_str(&format!("  important: {}\n", task.important));
     }
     out
 }
@@ -356,6 +403,7 @@ struct EditEntry {
     project: Option<String>,
     due: Option<NaiveDate>,
     reminds: Vec<NaiveDate>,
+    important: bool,
 }
 
 fn parse_yaml(input: &str) -> Vec<EditEntry> {
@@ -365,6 +413,7 @@ fn parse_yaml(input: &str) -> Vec<EditEntry> {
     let mut current_project: Option<String> = None;
     let mut current_due: Option<NaiveDate> = None;
     let mut current_reminds: Vec<NaiveDate> = Vec::new();
+    let mut current_important: bool = false;
 
     for (line_num, line) in input.lines().enumerate() {
         let trimmed = line.trim();
@@ -381,6 +430,7 @@ fn parse_yaml(input: &str) -> Vec<EditEntry> {
                     project: current_project.take(),
                     due: current_due.take(),
                     reminds: std::mem::take(&mut current_reminds),
+                    important: current_important,
                 });
             }
             let val = trimmed.trim_start_matches("- id:").trim();
@@ -392,6 +442,7 @@ fn parse_yaml(input: &str) -> Vec<EditEntry> {
             current_project = None;
             current_due = None;
             current_reminds = Vec::new();
+            current_important = false;
         } else if trimmed.starts_with("title:") {
             let val = trimmed.trim_start_matches("title:").trim();
             current_title = Some(val.to_string());
@@ -428,6 +479,9 @@ fn parse_yaml(input: &str) -> Vec<EditEntry> {
                     })
                     .collect()
             };
+        } else if trimmed.starts_with("important:") {
+            let val = trimmed.trim_start_matches("important:").trim();
+            current_important = val == "true";
         }
     }
 
@@ -439,6 +493,7 @@ fn parse_yaml(input: &str) -> Vec<EditEntry> {
             project: current_project,
             due: current_due,
             reminds: current_reminds,
+            important: current_important,
         });
     }
 
@@ -548,6 +603,7 @@ mod tests {
                 NaiveDate::from_ymd_opt(2026, 4, 8).unwrap(),
                 NaiveDate::from_ymd_opt(2026, 4, 9).unwrap(),
             ],
+            important: true,
         }];
         let yaml = tasks_to_yaml(&tasks);
         let entries = parse_yaml(&yaml);
@@ -568,5 +624,6 @@ mod tests {
             entries[0].reminds[1],
             NaiveDate::from_ymd_opt(2026, 4, 9).unwrap()
         );
+        assert!(entries[0].important);
     }
 }

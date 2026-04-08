@@ -462,3 +462,52 @@ fn test_list_many_tasks_no_panic() {
         .success()
         .stdout(predicate::str::contains("20 tasks"));
 }
+
+#[test]
+fn test_list_important_only() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["add", "Normal task"])
+        .assert()
+        .success();
+    cmd(&db_path)
+        .args(["add", "Important task", "--important"])
+        .assert()
+        .success();
+    cmd(&db_path)
+        .args(["add", "Another normal"])
+        .assert()
+        .success();
+
+    let output = cmd(&db_path)
+        .args(["list", "--important-only"])
+        .assert()
+        .success();
+
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+    assert!(stdout.contains("Important task"));
+    assert!(!stdout.contains("Normal task"));
+    assert!(!stdout.contains("Another normal"));
+    assert!(stdout.contains("1 tasks"));
+}
+
+#[test]
+fn test_list_important_only_no_results() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["add", "Normal task"])
+        .assert()
+        .success();
+
+    cmd(&db_path)
+        .args(["list", "--important-only"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "No tasks. Add one with: my-task add \"task title\"",
+        ));
+}
