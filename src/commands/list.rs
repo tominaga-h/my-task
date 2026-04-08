@@ -184,13 +184,12 @@ pub fn run(args: ListArgs) {
                 } else {
                     cell
                 }
+            } else if task.important {
+                Cell::new(&task.title)
+                    .fg(Color::Magenta)
+                    .add_attribute(Attribute::Bold)
             } else {
-                let cell = Cell::new(&task.title);
-                if task.important {
-                    cell.add_attribute(Attribute::Bold)
-                } else {
-                    cell
-                }
+                Cell::new(&task.title)
             };
 
             let due_cell = if is_inactive {
@@ -243,13 +242,12 @@ pub fn run(args: ListArgs) {
                 } else {
                     cell
                 }
+            } else if task.important {
+                Cell::new(&task.title)
+                    .fg(Color::Magenta)
+                    .add_attribute(Attribute::Bold)
             } else {
-                let cell = Cell::new(&task.title);
-                if task.important {
-                    cell.add_attribute(Attribute::Bold)
-                } else {
-                    cell
-                }
+                Cell::new(&task.title)
             };
 
             let due_cell = if is_overdue {

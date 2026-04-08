@@ -91,13 +91,12 @@ pub fn run(args: NotifyArgs) {
                 } else {
                     cell
                 }
+            } else if task.important {
+                Cell::new(&task.title)
+                    .fg(Color::Magenta)
+                    .add_attribute(Attribute::Bold)
             } else {
-                let cell = Cell::new(&task.title);
-                if task.important {
-                    cell.add_attribute(Attribute::Bold)
-                } else {
-                    cell
-                }
+                Cell::new(&task.title)
             };
             let due_cell = if diff < 0 {
                 Cell::new(&due_label).fg(Color::Red)
@@ -151,7 +150,9 @@ pub fn run(args: NotifyArgs) {
             let project_text = task.project.as_deref().unwrap_or_default();
             let project_cell = Cell::new(project_text);
             let title_cell = if task.important {
-                Cell::new(&task.title).add_attribute(Attribute::Bold)
+                Cell::new(&task.title)
+                    .fg(Color::Magenta)
+                    .add_attribute(Attribute::Bold)
             } else {
                 Cell::new(&task.title)
             };
