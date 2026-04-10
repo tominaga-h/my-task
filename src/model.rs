@@ -36,10 +36,10 @@ pub enum SortKey {
 impl SortKey {
     pub fn as_sql(&self) -> &str {
         match self {
-            SortKey::Id => "id",
-            SortKey::Due => "due IS NULL, due",
+            SortKey::Id => "t.id",
+            SortKey::Due => "t.due IS NULL, t.due",
             SortKey::Project => "project IS NULL, project",
-            SortKey::Created => "created",
+            SortKey::Created => "t.created",
         }
     }
 }

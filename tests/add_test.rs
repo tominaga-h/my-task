@@ -46,9 +46,14 @@ fn test_add_with_options() {
 
     let conn = rusqlite::Connection::open(&db_path).unwrap();
     let (project, due): (Option<String>, Option<String>) = conn
-        .query_row("SELECT project, due FROM tasks WHERE id = 1", [], |row| {
-            Ok((row.get(0)?, row.get(1)?))
-        })
+        .query_row(
+            "SELECT p.name, t.due
+             FROM tasks t
+             LEFT JOIN projects p ON t.project_id = p.id
+             WHERE t.id = 1",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
         .unwrap();
     assert_eq!(project, Some("myproj".to_string()));
     assert_eq!(due, Some("2026-04-15".to_string()));
