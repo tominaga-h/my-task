@@ -4,5 +4,6 @@ pub mod done;
 pub mod edit;
 pub mod list;
 pub mod notify;
+pub mod projects;
 pub mod search;
 pub mod show;

@@ -399,6 +399,37 @@ pub fn search_tasks(
     Ok(tasks)
 }
 
+pub struct ProjectSummary {
+    pub name: String,
+    pub open_count: u32,
+    pub done_count: u32,
+    pub closed_count: u32,
+}
+
+pub fn list_projects(conn: &Connection) -> Result<Vec<ProjectSummary>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT p.name,
+                SUM(CASE WHEN t.status = 'open' THEN 1 ELSE 0 END) AS open_count,
+                SUM(CASE WHEN t.status = 'done' THEN 1 ELSE 0 END) AS done_count,
+                SUM(CASE WHEN t.status = 'closed' THEN 1 ELSE 0 END) AS closed_count
+         FROM projects p
+         LEFT JOIN tasks t ON p.id = t.project_id
+         GROUP BY p.id, p.name
+         ORDER BY p.name ASC",
+    )?;
+    let projects = stmt
+        .query_map([], |row| {
+            Ok(ProjectSummary {
+                name: row.get(0)?,
+                open_count: row.get(1)?,
+                done_count: row.get(2)?,
+                closed_count: row.get(3)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(projects)
+}
+
 fn parse_date(s: &str) -> NaiveDate {
     NaiveDate::parse_from_str(s, "%Y-%m-%d").expect("invalid date in database")
 }
@@ -867,5 +898,48 @@ mod tests {
 
         let tasks = list_tasks(&conn, false, None, &[SortKey::Id], SortOrder::Asc, false).unwrap();
         assert_eq!(tasks.len(), 2);
+    }
+
+    #[test]
+    fn test_list_projects_empty() {
+        let conn = open_in_memory().unwrap();
+        let projects = list_projects(&conn).unwrap();
+        assert!(projects.is_empty());
+    }
+
+    #[test]
+    fn test_list_projects_with_counts() {
+        let conn = open_in_memory().unwrap();
+        let t = today();
+
+        add_task(&conn, "Open 1", Some("alpha"), None, t, false).unwrap();
+        add_task(&conn, "Open 2", Some("alpha"), None, t, false).unwrap();
+        let id3 = add_task(&conn, "Done", Some("alpha"), None, t, false).unwrap();
+        complete_task(&conn, id3, t).unwrap();
+        add_task(&conn, "Beta task", Some("beta"), None, t, false).unwrap();
+
+        let projects = list_projects(&conn).unwrap();
+        assert_eq!(projects.len(), 2);
+
+        assert_eq!(projects[0].name, "alpha");
+        assert_eq!(projects[0].open_count, 2);
+        assert_eq!(projects[0].done_count, 1);
+        assert_eq!(projects[0].closed_count, 0);
+
+        assert_eq!(projects[1].name, "beta");
+        assert_eq!(projects[1].open_count, 1);
+        assert_eq!(projects[1].done_count, 0);
+    }
+
+    #[test]
+    fn test_list_projects_excludes_no_project_tasks() {
+        let conn = open_in_memory().unwrap();
+        let t = today();
+        add_task(&conn, "No project", None, None, t, false).unwrap();
+        add_task(&conn, "Has project", Some("proj"), None, t, false).unwrap();
+
+        let projects = list_projects(&conn).unwrap();
+        assert_eq!(projects.len(), 1);
+        assert_eq!(projects[0].name, "proj");
     }
 }
