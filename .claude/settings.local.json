@@ -12,7 +12,8 @@
       "Bash(cargo run:*)",
       "Bash(my-task *)",
       "Bash(make check:*)",
-      "Bash(make release:*)"
+      "Bash(make release:*)",
+      "Bash(sqlite3:*)"
     ]
   }
 }

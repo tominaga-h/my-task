@@ -38,15 +38,11 @@ fn test_projects_shows_project_names() {
         .assert()
         .success();
 
-    cmd(&db_path)
-        .args(["projects"])
-        .assert()
-        .success()
-        .stdout(
-            predicate::str::contains("alpha")
-                .and(predicate::str::contains("beta"))
-                .and(predicate::str::contains("2 projects")),
-        );
+    cmd(&db_path).args(["projects"]).assert().success().stdout(
+        predicate::str::contains("alpha")
+            .and(predicate::str::contains("beta"))
+            .and(predicate::str::contains("2 projects")),
+    );
 }
 
 #[test]
