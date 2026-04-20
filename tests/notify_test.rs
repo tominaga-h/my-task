@@ -11,16 +11,21 @@ fn cmd(db_path: &std::path::Path) -> Command {
 fn setup_db(db_path: &std::path::Path) -> rusqlite::Connection {
     let conn = rusqlite::Connection::open(db_path).unwrap();
     conn.execute_batch(
-        "CREATE TABLE IF NOT EXISTS tasks (
-            id      INTEGER PRIMARY KEY AUTOINCREMENT,
-            title   TEXT    NOT NULL,
-            status  TEXT    NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'done', 'closed')),
-            source  TEXT    NOT NULL DEFAULT 'private',
-            project TEXT,
-            due     TEXT,
-            done_at TEXT,
-            created TEXT    NOT NULL,
-            updated TEXT    NOT NULL
+        "CREATE TABLE IF NOT EXISTS projects (
+            id    INTEGER PRIMARY KEY AUTOINCREMENT,
+            name  TEXT    NOT NULL UNIQUE
+        );
+        CREATE TABLE IF NOT EXISTS tasks (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            title      TEXT    NOT NULL,
+            status     TEXT    NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'done', 'closed')),
+            source     TEXT    NOT NULL DEFAULT 'private',
+            project_id INTEGER REFERENCES projects(id),
+            due        TEXT,
+            done_at    TEXT,
+            created    TEXT    NOT NULL,
+            updated    TEXT    NOT NULL,
+            important  INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE IF NOT EXISTS task_reminds (
             id       INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,10 +44,27 @@ fn insert_task(
     status: &str,
     project: Option<&str>,
 ) {
+    let project_id = if let Some(project) = project {
+        conn.execute(
+            "INSERT OR IGNORE INTO projects (name) VALUES (?1)",
+            rusqlite::params![project],
+        )
+        .unwrap();
+        Some(
+            conn.query_row(
+                "SELECT id FROM projects WHERE name = ?1",
+                rusqlite::params![project],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap(),
+        )
+    } else {
+        None
+    };
     conn.execute(
-        "INSERT INTO tasks (title, status, source, project, due, created, updated)
+        "INSERT INTO tasks (title, status, source, project_id, due, created, updated)
          VALUES (?1, ?2, 'private', ?3, ?4, '2026-03-01', '2026-03-01')",
-        rusqlite::params![title, status, project, due],
+        rusqlite::params![title, status, project_id, due],
     )
     .unwrap();
 }

@@ -11,12 +11,18 @@ pub fn open(path: &Path) -> Result<Connection, rusqlite::Error> {
     let conn = Connection::open(path)?;
     conn.execute_batch("PRAGMA journal_mode=WAL;")?;
     conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS projects (
+            id    INTEGER PRIMARY KEY AUTOINCREMENT,
+            name  TEXT    NOT NULL UNIQUE
+        );",
+    )?;
+    conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS tasks (
             id        INTEGER PRIMARY KEY AUTOINCREMENT,
             title     TEXT    NOT NULL,
             status    TEXT    NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'done', 'closed')),
             source    TEXT    NOT NULL DEFAULT 'private',
-            project   TEXT,
+            project_id INTEGER REFERENCES projects(id),
             due       TEXT,
             done_at   TEXT,
             created   TEXT    NOT NULL,
@@ -31,54 +37,132 @@ pub fn open(path: &Path) -> Result<Connection, rusqlite::Error> {
             remind_at TEXT NOT NULL
         );",
     )?;
-    // Migrate: add 'closed' to CHECK constraint for existing databases
-    migrate_status_check(&conn)?;
-    // Migrate: add 'important' column for existing databases
-    migrate_important(&conn)?;
+    migrate_tasks_schema(&conn)?;
     Ok(conn)
 }
 
-fn migrate_status_check(conn: &Connection) -> Result<(), rusqlite::Error> {
+fn migrate_tasks_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
     let sql: String = conn.query_row(
         "SELECT sql FROM sqlite_master WHERE type='table' AND name='tasks'",
         [],
         |row| row.get(0),
     )?;
-    if sql.contains("'closed'") {
+    if sql.contains("project_id") && sql.contains("important") && sql.contains("'closed'") {
         return Ok(());
     }
-    conn.execute_batch(
-        "BEGIN;
-         CREATE TABLE tasks_new (
-            id      INTEGER PRIMARY KEY AUTOINCREMENT,
-            title   TEXT    NOT NULL,
-            status  TEXT    NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'done', 'closed')),
-            source  TEXT    NOT NULL DEFAULT 'private',
-            project TEXT,
-            due     TEXT,
-            done_at TEXT,
-            created TEXT    NOT NULL,
-            updated TEXT    NOT NULL
-         );
-         INSERT INTO tasks_new SELECT * FROM tasks;
-         DROP TABLE tasks;
-         ALTER TABLE tasks_new RENAME TO tasks;
-         COMMIT;",
-    )?;
-    Ok(())
+
+    let has_important = table_has_column(conn, "tasks", "important")?;
+
+    conn.execute_batch("PRAGMA foreign_keys = OFF;")?;
+    conn.execute_batch("BEGIN;")?;
+    let migration_result: Result<(), rusqlite::Error> = (|| {
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS projects (
+                id    INTEGER PRIMARY KEY AUTOINCREMENT,
+                name  TEXT    NOT NULL UNIQUE
+            );",
+        )?;
+        conn.execute_batch(
+            "CREATE TABLE tasks_new (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                title      TEXT    NOT NULL,
+                status     TEXT    NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'done', 'closed')),
+                source     TEXT    NOT NULL DEFAULT 'private',
+                project_id INTEGER REFERENCES projects(id),
+                due        TEXT,
+                done_at    TEXT,
+                created    TEXT    NOT NULL,
+                updated    TEXT    NOT NULL,
+                important  INTEGER NOT NULL DEFAULT 0
+            );",
+        )?;
+        conn.execute_batch(
+            "INSERT OR IGNORE INTO projects (name)
+             SELECT DISTINCT project
+             FROM tasks
+             WHERE project IS NOT NULL AND project != '';",
+        )?;
+        let important_expr = if has_important {
+            "COALESCE(important, 0)"
+        } else {
+            "0"
+        };
+        let insert_sql = format!(
+            "INSERT INTO tasks_new (id, title, status, source, project_id, due, done_at, created, updated, important)
+             SELECT id,
+                    title,
+                    status,
+                    source,
+                    CASE
+                        WHEN project IS NULL OR project = '' THEN NULL
+                        ELSE (SELECT id FROM projects WHERE name = tasks.project)
+                    END,
+                    due,
+                    done_at,
+                    created,
+                    updated,
+                    {}
+             FROM tasks;",
+            important_expr
+        );
+        conn.execute_batch(&insert_sql)?;
+        conn.execute_batch(
+            "DROP TABLE tasks;
+             ALTER TABLE tasks_new RENAME TO tasks;",
+        )?;
+        Ok(())
+    })();
+
+    match migration_result {
+        Ok(()) => {
+            conn.execute_batch("COMMIT;")?;
+            conn.execute_batch("PRAGMA foreign_keys = ON;")?;
+            Ok(())
+        }
+        Err(err) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            conn.execute_batch("PRAGMA foreign_keys = ON;").ok();
+            Err(err)
+        }
+    }
 }
 
-fn migrate_important(conn: &Connection) -> Result<(), rusqlite::Error> {
-    let sql: String = conn.query_row(
-        "SELECT sql FROM sqlite_master WHERE type='table' AND name='tasks'",
-        [],
+fn table_has_column(conn: &Connection, table: &str, column: &str) -> Result<bool, rusqlite::Error> {
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({})", table))?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let name: String = row.get(1)?;
+        if name == column {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn resolve_project_id(
+    conn: &Connection,
+    project: Option<&str>,
+) -> Result<Option<i64>, rusqlite::Error> {
+    let Some(project) = project.map(str::trim).filter(|p| !p.is_empty()) else {
+        return Ok(None);
+    };
+
+    conn.execute(
+        "INSERT OR IGNORE INTO projects (name) VALUES (?1)",
+        params![project],
+    )?;
+    let id = conn.query_row(
+        "SELECT id FROM projects WHERE name = ?1",
+        params![project],
         |row| row.get(0),
     )?;
-    if sql.contains("important") {
-        return Ok(());
-    }
-    conn.execute_batch("ALTER TABLE tasks ADD COLUMN important INTEGER NOT NULL DEFAULT 0")?;
-    Ok(())
+    Ok(Some(id))
+}
+
+fn tasks_select_sql() -> &'static str {
+    "SELECT t.id, t.title, t.status, t.source, p.name AS project, t.due, t.done_at, t.created, t.updated, t.important
+     FROM tasks t
+     LEFT JOIN projects p ON t.project_id = p.id"
 }
 
 pub fn add_task(
@@ -91,19 +175,17 @@ pub fn add_task(
 ) -> Result<u32, rusqlite::Error> {
     let today_str = today.to_string();
     let due_str = due.map(|d| d.to_string());
+    let project_id = resolve_project_id(conn, project)?;
     conn.execute(
-        "INSERT INTO tasks (title, source, project, due, created, updated, important)
+        "INSERT INTO tasks (title, source, project_id, due, created, updated, important)
          VALUES (?1, 'private', ?2, ?3, ?4, ?4, ?5)",
-        params![title, project, due_str, today_str, important as i32],
+        params![title, project_id, due_str, today_str, important as i32],
     )?;
     Ok(conn.last_insert_rowid() as u32)
 }
 
 pub fn find_task(conn: &Connection, id: u32) -> Result<Option<Task>, rusqlite::Error> {
-    let mut stmt = conn.prepare(
-        "SELECT id, title, status, source, project, due, done_at, created, updated, important
-         FROM tasks WHERE id = ?1",
-    )?;
+    let mut stmt = conn.prepare(&format!("{} WHERE t.id = ?1", tasks_select_sql()))?;
     let mut rows = stmt.query_map(params![id], row_to_task)?;
     rows.next().transpose()
 }
@@ -134,17 +216,16 @@ pub fn list_tasks(
     order: SortOrder,
     important_only: bool,
 ) -> Result<Vec<Task>, rusqlite::Error> {
-    let base =
-        "SELECT id, title, status, source, project, due, done_at, created, updated, important FROM tasks";
+    let base = tasks_select_sql();
     let mut conditions = Vec::new();
     if !all {
-        conditions.push("status = 'open'");
+        conditions.push("t.status = 'open'");
     }
     if project.is_some() {
-        conditions.push("project = ?1");
+        conditions.push("p.name = ?1");
     }
     if important_only {
-        conditions.push("important = 1");
+        conditions.push("t.important = 1");
     }
     let where_clause = if conditions.is_empty() {
         String::new()
@@ -189,8 +270,9 @@ pub fn update_task(
         param_idx += 1;
     }
     if let Some(p) = project {
-        sets.push(format!("project = ?{}", param_idx));
-        values.push(Box::new(p.to_string()));
+        let project_id = resolve_project_id(conn, Some(p))?;
+        sets.push(format!("project_id = ?{}", param_idx));
+        values.push(Box::new(project_id));
         param_idx += 1;
     }
     if let Some(d) = due {
@@ -221,12 +303,10 @@ pub fn get_due_tasks(
     target_date: NaiveDate,
 ) -> Result<Vec<Task>, rusqlite::Error> {
     let target_str = target_date.to_string();
-    let mut stmt = conn.prepare(
-        "SELECT id, title, status, source, project, due, done_at, created, updated, important
-         FROM tasks
-         WHERE status = 'open' AND due IS NOT NULL AND due <= ?1
-         ORDER BY due ASC",
-    )?;
+    let mut stmt = conn.prepare(&format!(
+        "{} WHERE t.status = 'open' AND t.due IS NOT NULL AND t.due <= ?1 ORDER BY t.due ASC",
+        tasks_select_sql()
+    ))?;
     let tasks = stmt
         .query_map(params![target_str], row_to_task)?
         .collect::<Result<Vec<_>, _>>()?;
@@ -267,8 +347,9 @@ pub fn get_tasks_with_remind_today(
 ) -> Result<Vec<Task>, rusqlite::Error> {
     let today_str = today.to_string();
     let mut stmt = conn.prepare(
-        "SELECT DISTINCT t.id, t.title, t.status, t.source, t.project, t.due, t.done_at, t.created, t.updated, t.important
+        "SELECT DISTINCT t.id, t.title, t.status, t.source, p.name AS project, t.due, t.done_at, t.created, t.updated, t.important
          FROM tasks t
+         LEFT JOIN projects p ON t.project_id = p.id
          JOIN task_reminds r ON t.id = r.task_id
          WHERE t.status = 'open' AND r.remind_at = ?1
          ORDER BY t.id ASC",
@@ -293,20 +374,19 @@ pub fn search_tasks(
     all: bool,
     project: Option<&str>,
 ) -> Result<Vec<Task>, rusqlite::Error> {
-    let base =
-        "SELECT id, title, status, source, project, due, done_at, created, updated, important FROM tasks";
+    let base = tasks_select_sql();
     let mut conditions = vec!["title LIKE ?1".to_string()];
     let like_pattern = format!("%{}%", keyword);
 
     if !all {
-        conditions.push("status = 'open'".to_string());
+        conditions.push("t.status = 'open'".to_string());
     }
     if project.is_some() {
-        conditions.push("project = ?2".to_string());
+        conditions.push("p.name = ?2".to_string());
     }
 
     let where_clause = format!(" WHERE {}", conditions.join(" AND "));
-    let sql = format!("{}{} ORDER BY id ASC", base, where_clause);
+    let sql = format!("{}{} ORDER BY t.id ASC", base, where_clause);
 
     let mut stmt = conn.prepare(&sql)?;
     let tasks: Vec<Task> = if let Some(p) = project {
@@ -317,6 +397,37 @@ pub fn search_tasks(
             .collect::<Result<Vec<_>, _>>()?
     };
     Ok(tasks)
+}
+
+pub struct ProjectSummary {
+    pub name: String,
+    pub open_count: u32,
+    pub done_count: u32,
+    pub closed_count: u32,
+}
+
+pub fn list_projects(conn: &Connection) -> Result<Vec<ProjectSummary>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT p.name,
+                SUM(CASE WHEN t.status = 'open' THEN 1 ELSE 0 END) AS open_count,
+                SUM(CASE WHEN t.status = 'done' THEN 1 ELSE 0 END) AS done_count,
+                SUM(CASE WHEN t.status = 'closed' THEN 1 ELSE 0 END) AS closed_count
+         FROM projects p
+         LEFT JOIN tasks t ON p.id = t.project_id
+         GROUP BY p.id, p.name
+         ORDER BY p.name ASC",
+    )?;
+    let projects = stmt
+        .query_map([], |row| {
+            Ok(ProjectSummary {
+                name: row.get(0)?,
+                open_count: row.get(1)?,
+                done_count: row.get(2)?,
+                closed_count: row.get(3)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(projects)
 }
 
 fn parse_date(s: &str) -> NaiveDate {
@@ -354,21 +465,26 @@ fn row_to_task(row: &rusqlite::Row) -> Result<Task, rusqlite::Error> {
 mod tests {
     use super::*;
     use chrono::NaiveDate;
+    use tempfile::TempDir;
 
     fn open_in_memory() -> Result<Connection, rusqlite::Error> {
         let conn = Connection::open_in_memory()?;
         conn.execute_batch(
-            "CREATE TABLE IF NOT EXISTS tasks (
-                id        INTEGER PRIMARY KEY AUTOINCREMENT,
-                title     TEXT    NOT NULL,
-                status    TEXT    NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'done', 'closed')),
-                source    TEXT    NOT NULL DEFAULT 'private',
-                project   TEXT,
-                due       TEXT,
-                done_at   TEXT,
-                created   TEXT    NOT NULL,
-                updated   TEXT    NOT NULL,
-                important INTEGER NOT NULL DEFAULT 0
+            "CREATE TABLE IF NOT EXISTS projects (
+                id    INTEGER PRIMARY KEY AUTOINCREMENT,
+                name  TEXT    NOT NULL UNIQUE
+            );
+            CREATE TABLE IF NOT EXISTS tasks (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                title      TEXT    NOT NULL,
+                status     TEXT    NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'done', 'closed')),
+                source     TEXT    NOT NULL DEFAULT 'private',
+                project_id INTEGER REFERENCES projects(id),
+                due        TEXT,
+                done_at    TEXT,
+                created    TEXT    NOT NULL,
+                updated    TEXT    NOT NULL,
+                important  INTEGER NOT NULL DEFAULT 0
             );
             CREATE TABLE IF NOT EXISTS task_reminds (
                 id       INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -377,6 +493,30 @@ mod tests {
             );",
         )?;
         Ok(conn)
+    }
+
+    fn legacy_db_path() -> (TempDir, std::path::PathBuf) {
+        let tmp = TempDir::new().unwrap();
+        let db_path = tmp.path().join("legacy.db");
+        let conn = Connection::open(&db_path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE tasks (
+                id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                title     TEXT    NOT NULL,
+                status    TEXT    NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'done', 'closed')),
+                source    TEXT    NOT NULL DEFAULT 'private',
+                project   TEXT,
+                due       TEXT,
+                done_at   TEXT,
+                created   TEXT    NOT NULL,
+                updated   TEXT    NOT NULL
+            );
+            INSERT INTO tasks (title, status, source, project, due, done_at, created, updated)
+            VALUES ('Legacy task', 'open', 'private', 'legacy-project', NULL, NULL, '2026-03-31', '2026-03-31');",
+        )
+        .unwrap();
+        drop(conn);
+        (tmp, db_path)
     }
 
     fn today() -> NaiveDate {
@@ -394,6 +534,33 @@ mod tests {
             )
             .unwrap();
         assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_open_migrates_legacy_project_column() {
+        let (_tmp, db_path) = legacy_db_path();
+        let conn = open(&db_path).unwrap();
+
+        let project_count: i64 = conn
+            .query_row(
+                "SELECT count(*) FROM projects WHERE name = 'legacy-project'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(project_count, 1);
+
+        let project_name: Option<String> = conn
+            .query_row(
+                "SELECT p.name
+                 FROM tasks t
+                 LEFT JOIN projects p ON t.project_id = p.id
+                 WHERE t.id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(project_name, Some("legacy-project".to_string()));
     }
 
     #[test]
@@ -731,5 +898,48 @@ mod tests {
 
         let tasks = list_tasks(&conn, false, None, &[SortKey::Id], SortOrder::Asc, false).unwrap();
         assert_eq!(tasks.len(), 2);
+    }
+
+    #[test]
+    fn test_list_projects_empty() {
+        let conn = open_in_memory().unwrap();
+        let projects = list_projects(&conn).unwrap();
+        assert!(projects.is_empty());
+    }
+
+    #[test]
+    fn test_list_projects_with_counts() {
+        let conn = open_in_memory().unwrap();
+        let t = today();
+
+        add_task(&conn, "Open 1", Some("alpha"), None, t, false).unwrap();
+        add_task(&conn, "Open 2", Some("alpha"), None, t, false).unwrap();
+        let id3 = add_task(&conn, "Done", Some("alpha"), None, t, false).unwrap();
+        complete_task(&conn, id3, t).unwrap();
+        add_task(&conn, "Beta task", Some("beta"), None, t, false).unwrap();
+
+        let projects = list_projects(&conn).unwrap();
+        assert_eq!(projects.len(), 2);
+
+        assert_eq!(projects[0].name, "alpha");
+        assert_eq!(projects[0].open_count, 2);
+        assert_eq!(projects[0].done_count, 1);
+        assert_eq!(projects[0].closed_count, 0);
+
+        assert_eq!(projects[1].name, "beta");
+        assert_eq!(projects[1].open_count, 1);
+        assert_eq!(projects[1].done_count, 0);
+    }
+
+    #[test]
+    fn test_list_projects_excludes_no_project_tasks() {
+        let conn = open_in_memory().unwrap();
+        let t = today();
+        add_task(&conn, "No project", None, None, t, false).unwrap();
+        add_task(&conn, "Has project", Some("proj"), None, t, false).unwrap();
+
+        let projects = list_projects(&conn).unwrap();
+        assert_eq!(projects.len(), 1);
+        assert_eq!(projects[0].name, "proj");
     }
 }

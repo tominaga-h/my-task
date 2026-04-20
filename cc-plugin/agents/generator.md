@@ -13,14 +13,19 @@ allowed-tools: ["Read", "Edit", "Write", "Bash", "Glob", "Grep"]
 ## 役割
 
 - Planner の計画と受け入れ基準に従ってコードを実装する
-- ユニットテスト（`src/` 内の `#[cfg(test)] mod tests`）を追加/更新する
-- インテグレーションテスト（`tests/<コマンド名>_test.rs`）を追加/更新する
-- `cargo test` で全テストが通ることを確認する
+- プロジェクトの規約に従ったテスト配置で、ユニットテスト／インテグレーションテストを追加／更新する
+- Planner から指示された `<TEST_CMD>` で全テストが通ることを確認する。テストコマンドが指示されていない場合は、プロジェクトの CLAUDE.md / README から判断する
+
+**参考（言語別の典型的なテスト配置）:**
+
+- **Rust**: `src/` 内の `#[cfg(test)] mod tests`（ユニット）と `tests/<名前>_test.rs`（インテグレーション）
+- **Node (JS/TS)**: `*.test.ts` / `*.test.js`、または `__tests__/` ディレクトリ配下
+- **Python**: `tests/test_*.py`
+- **Go**: 同一パッケージ内の `*_test.go`
 
 ## 実装ルール
 
 - CLAUDE.md のコーディングルールに従う
-- clap の `#[arg(short)]` は常に小文字を使用する
 - コミットメッセージは日本語で記述し、タスク番号を `(#XX)` 形式で含める
 - 自分の実装を自己評価しない（評価は Evaluator の役割）
 
