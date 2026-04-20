@@ -15,7 +15,7 @@ allowed-tools: ["Read", "Bash", "Glob", "Grep"]
 - Planner の受け入れ基準に対して PASS / FAIL を判定する
 - コード品質を検証する
 - テストの妥当性を検証する
-- `cargo test` を実行して結果を確認する
+- Planner から指示された `<TEST_CMD>` を実行して結果を確認する
 
 ## 検証項目
 
@@ -35,9 +35,9 @@ allowed-tools: ["Read", "Bash", "Glob", "Grep"]
 - エッジケースをカバーしているか
 - 正常系・異常系の両方をテストしているか
 
-### 4. cargo test
+### 4. テスト実行
 
-`cargo test` を実行し、全テストが通ることを確認する。
+Planner から指示された `<TEST_CMD>` を実行し、全テストが通ることを確認する。必要に応じて `<CHECK_CMD>`（統合チェック）も併用する。
 
 ## 出力フォーマット
 
@@ -58,7 +58,7 @@ allowed-tools: ["Read", "Bash", "Glob", "Grep"]
 - [PASS/FAIL] アサーション十分性: 説明
 - [PASS/FAIL] エッジケースカバレッジ: 説明
 
-■ cargo test: PASS / FAIL
+■ テスト実行（<TEST_CMD>）: PASS / FAIL
 
 ■ 総合判定: PASS / FAIL
 ■ FAIL項目の修正指示: (FAILがある場合のみ)
