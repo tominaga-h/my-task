@@ -1,9 +1,20 @@
 ---
 name: task-dev-cycle
-description: >-
-  my-taskコマンドに登録されたタスクに基づき、プロジェクトの開発サイクルを回すスキル
+description: my-taskコマンドに登録されたタスクに基づき、プロジェクトの開発サイクルを回すスキル
 argument-hint: "[#タスクID] (省略時はタスク一覧から選択)"
-allowed-tools: ["Read", "Edit", "Write", "Bash", "Glob", "Grep", "Agent", "AskUserQuestion", "TaskCreate", "TaskUpdate"]
+allowed-tools:
+  [
+    "Read",
+    "Edit",
+    "Write",
+    "Bash",
+    "Glob",
+    "Grep",
+    "Agent",
+    "AskUserQuestion",
+    "TaskCreate",
+    "TaskUpdate",
+  ]
 trigger: /task-dev-cycle
 ---
 
@@ -38,6 +49,7 @@ my-task show <タスクID>
 ```
 
 以下の場合はユーザーに報告し、確認を取る:
+
 - 指定されたIDのタスクが存在しない
 - 指定されたタスクが既に DONE 状態
 
@@ -87,30 +99,34 @@ git checkout -b feature/<タスク内容を表す短い英語名>
 
 ```markdown
 <!-- dev-cycle:toolchain start -->
+
 ...
+
 <!-- dev-cycle:toolchain end -->
 ```
 
 **ブロックが存在する場合:**
+
 - ブロック内に記載された `<TEST_CMD>` / `<BUILD_CMD>` / `<LINT_CMD>` / `<CHECK_CMD>` / `<VERSION_FILE>` / `<VERSION_BUMP_POLICY>` / `<SEMVER_ENABLED>` をそのまま採用する
 - **2.5a〜2.5e はスキップ**して 2.5f に進む（再質問しない）
 - ただしユーザーが明示的に「ツールチェーンを再確認したい」「CLAUDE.md の定義を更新したい」等を指示した場合は、ブロックを無視して 2.5a から実行する
 
 **ブロックが存在しない場合:**
+
 - 通常通り 2.5a 以降を実行する。確定後、2.5g で CLAUDE.md にブロックを追記する
 
 #### 2.5a. プロジェクト種別の自動検出
 
 リポジトリルート直下のマニフェストファイルを `Glob` / `Read` で確認し、以下の表に従ってプロジェクト種別を判定する。
 
-| 検出ファイル | プロジェクト種別 | 備考 |
-| --- | --- | --- |
-| `Cargo.toml` | Rust | `cargo` 系コマンド |
-| `package.json` | Node (JS/TS) | `scripts.test` / `scripts.build` を参照。`dependencies` に `react` / `vue` / `next` / `nuxt` / `vite` があれば Web フロントと副分類する |
-| `pyproject.toml` / `setup.py` / `requirements.txt` | Python | `pytest` / `uv` / `poetry` 等を用途に応じて判別 |
-| `go.mod` | Go | `go test ./...` / `go build` |
-| `pom.xml` / `build.gradle(.kts)` | JVM | 参考情報のみ。テスト／ビルドコマンドは AskUserQuestion で確認 |
-| 上記いずれも該当しない | 不明 | AskUserQuestion で言語／種別を確認 |
+| 検出ファイル                                       | プロジェクト種別 | 備考                                                                                                                                    |
+| -------------------------------------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `Cargo.toml`                                       | Rust             | `cargo` 系コマンド                                                                                                                      |
+| `package.json`                                     | Node (JS/TS)     | `scripts.test` / `scripts.build` を参照。`dependencies` に `react` / `vue` / `next` / `nuxt` / `vite` があれば Web フロントと副分類する |
+| `pyproject.toml` / `setup.py` / `requirements.txt` | Python           | `pytest` / `uv` / `poetry` 等を用途に応じて判別                                                                                         |
+| `go.mod`                                           | Go               | `go test ./...` / `go build`                                                                                                            |
+| `pom.xml` / `build.gradle(.kts)`                   | JVM              | 参考情報のみ。テスト／ビルドコマンドは AskUserQuestion で確認                                                                           |
+| 上記いずれも該当しない                             | 不明             | AskUserQuestion で言語／種別を確認                                                                                                      |
 
 **モノレポ対策**: 複数のマニフェストが存在する場合、作業対象ファイル（タスク内容から推測できる実装対象）が所属するディレクトリに最も近いマニフェストを優先する。優先先が曖昧な場合は AskUserQuestion でどのパッケージを対象にするか確認する。
 
@@ -127,13 +143,13 @@ git checkout -b feature/<タスク内容を表す短い英語名>
 
 #### 2.5c. 言語別デフォルトコマンド表（抽出失敗時のフォールバック）
 
-| 種別 | テスト | ビルド | リント／フォーマット | 統合チェック |
-| --- | --- | --- | --- | --- |
-| Rust | `cargo test --all-targets` | `cargo build` | `cargo fmt --all && cargo clippy --all-targets -- -D warnings` | `make check`（存在すれば） |
-| Node | `npm test` または `package.json` の `scripts.test` | `npm run build` | `npm run lint` / `npm run format` | `npm run check`（存在すれば） |
-| Python | `pytest` | （任意） | `ruff check` / `black .` | `tox` / `nox`（存在すれば） |
-| Go | `go test ./...` | `go build ./...` | `go vet ./... && gofmt -l .` | （なし） |
-| 不明 | AskUserQuestion | AskUserQuestion | AskUserQuestion | AskUserQuestion |
+| 種別   | テスト                                             | ビルド           | リント／フォーマット                                           | 統合チェック                  |
+| ------ | -------------------------------------------------- | ---------------- | -------------------------------------------------------------- | ----------------------------- |
+| Rust   | `cargo test --all-targets`                         | `cargo build`    | `cargo fmt --all && cargo clippy --all-targets -- -D warnings` | `make check`（存在すれば）    |
+| Node   | `npm test` または `package.json` の `scripts.test` | `npm run build`  | `npm run lint` / `npm run format`                              | `npm run check`（存在すれば） |
+| Python | `pytest`                                           | （任意）         | `ruff check` / `black .`                                       | `tox` / `nox`（存在すれば）   |
+| Go     | `go test ./...`                                    | `go build ./...` | `go vet ./... && gofmt -l .`                                   | （なし）                      |
+| 不明   | AskUserQuestion                                    | AskUserQuestion  | AskUserQuestion                                                | AskUserQuestion               |
 
 #### 2.5d. AskUserQuestion の使い分けルール
 
@@ -184,6 +200,7 @@ git checkout -b feature/<タスク内容を表す短い英語名>
 
    ```markdown
    <!-- dev-cycle:toolchain start -->
+
    ## dev-cycle ツールチェーン定義（自動生成）
 
    このセクションは `/task-dev-cycle` スキルにより自動管理されている。手動編集は可能だが、フォーマット（マーカーとキー名）は変更しないこと。再検出させたい場合はブロックごと削除する。
@@ -202,6 +219,7 @@ git checkout -b feature/<タスク内容を表す短い英語名>
 4. CLAUDE.md の変更はこの dev-cycle 内で行う他のコミット（feature ブランチ上のタスク実装コミット）に同梱して構わない。タスクと関係ない単独コミットを増やさないこと。
 
 **注意:**
+
 - 値が空のキー（例: `<CHECK_CMD>`）も省略せず空文字 `` ` ` `` で必ず記載する。次回読み込み時にキー欠落と区別できるようにするため。
 - このブロックを書き込むことで、次回 `/task-dev-cycle` 起動時は 2.5-pre で検出され、2.5a〜2.5e の自動検出・AskUserQuestion 一式がスキップされる。
 
@@ -215,6 +233,7 @@ git checkout -b feature/<タスク内容を表す短い英語名>
 Agent ツールで `planner` エージェント（`agents/planner.md`）を起動し、実装計画を策定する。
 
 Planner への指示内容:
+
 - タスクの内容と目的を伝える
 - 2.5 で確定したプロジェクト種別と、`<TEST_CMD>` / `<BUILD_CMD>` / `<LINT_CMD>` / `<CHECK_CMD>` を伝える
 - CLAUDE.md、既存コードの構成を読み取らせる
@@ -223,13 +242,35 @@ Planner への指示内容:
   - 受け入れ基準（Evaluator が検証する具体的なチェックリスト）
   - テスト方針（プロジェクトの規約に従ったテスト配置で、何をテストするか）
 
-Planner の出力を確認し、必要に応じてユーザーに方針の確認を取る。
+##### 計画提示と承認ゲート（必須）
+
+Planner の出力を受け取ったら、**必ず以下のフォーマットでユーザーに全文提示する**。要約や省略は禁止。
+
+```
+【Planner からの実装計画】
+
+■ 変更対象ファイルと変更概要
+<Planner の出力をそのまま転記>
+
+■ 受け入れ基準
+<Planner の出力をそのまま転記>
+
+■ テスト方針
+<Planner の出力をそのまま転記>
+
+この計画で Generator に実装を依頼してよろしいですか？
+（修正したい点があれば指示してください。承認されるまで Generator は起動しません）
+```
+
+ユーザーから明示的な承認（「OK」「進めて」等）を得るまで、3b に進まないこと。
+修正指示があった場合は Planner を再起動して計画を更新し、再度承認を得る。
 
 #### 3b. Generator（実装）
 
 Agent ツールで `generator` エージェント（`agents/generator.md`）を起動し、Planner の計画に基づいて実装する。
 
 Generator への指示内容:
+
 - Planner が策定した計画と受け入れ基準を渡す
 - `<TEST_CMD>` を伝える
 - 以下を実行させる:
@@ -244,6 +285,7 @@ Agent ツールで `evaluator` エージェント（`agents/evaluator.md`）を�
 Generator と同一エージェントで評価させないこと（自己評価バイアスの防止）。
 
 Evaluator への指示内容:
+
 - Planner の受け入れ基準を渡す
 - `<TEST_CMD>` を伝える（必要なら `<CHECK_CMD>` も併用）
 - 以下を検証させる:
@@ -253,13 +295,45 @@ Evaluator への指示内容:
   - **テスト実行**: `<TEST_CMD>`（必要に応じて `<CHECK_CMD>`）を実行し、結果を確認
 - 検証結果をレポート形式で出力させる
 
-#### 3d. 差し戻しループ
+##### 評価レポート提示（必須）
 
-Evaluator が FAIL を報告した場合:
-1. FAIL 項目とレポートを Generator サブエージェントに渡して修正を指示する
-2. 修正後、再度 Evaluator サブエージェントで検証する
-3. 全項目が PASS になるまで繰り返す（最大3ラウンド）
-4. 3ラウンドで解決しない場合はユーザーに報告して判断を仰ぐ
+Evaluator のレポートを受け取ったら、**必ず以下のフォーマットでユーザーに全文提示する**。要約や省略は禁止。
+
+```
+【Evaluator レポート（ラウンド <N>）】
+
+■ 受け入れ基準の判定
+<各項目の PASS / FAIL を全件転記>
+
+■ コード品質
+<Evaluator のコメントを転記>
+
+■ テストの妥当性
+<Evaluator のコメントを転記>
+
+■ テスト実行結果
+<Evaluator が実行したコマンドと結果のサマリ>
+
+■ 総合判定: PASS / FAIL
+```
+
+#### 3d. 差し戻しループ（ラウンドごとの承認制）
+
+Evaluator のレポートを提示した後の挙動:
+
+- **総合判定が PASS の場合**: ユーザーに「この内容で完了として次のステップ（テスト実行→マージ準備）に進んでよいですか？」と確認し、承認を得てから Step 4 に進む。
+- **総合判定が FAIL の場合**: 自動で次ラウンドに進まない。代わりに以下をユーザーに提示する:
+
+  ```
+  Evaluator が FAIL を報告しました。次のいずれかを選択してください:
+  1. Generator に修正を依頼して再評価する（次ラウンドへ）
+  2. ユーザー自身で修正方針を指示する
+  3. 一旦中断する
+  ```
+
+  ユーザーが「1」を選んだ場合のみ、FAIL 項目とレポートを Generator サブエージェントに渡して修正を指示し、修正後 Evaluator で再評価する。再評価後はまた本セクション冒頭に戻り、レポート提示と続行確認を繰り返す。
+
+ラウンド回数の自動上限は設けない。**毎ラウンド必ずユーザー確認を挟む**こと。
 
 ### 4. テストチェック
 
@@ -270,12 +344,31 @@ Evaluator が FAIL を報告した場合:
 全テストがパスすることを確認する。失敗した場合は修正してから次に進む。
 `<CHECK_CMD>` が存在する場合はそれも実行し、fmt / lint / test の統合チェックもパスすることを確認する。
 
+実行結果（コマンドと PASS/FAIL）をユーザーに提示する。
+
 ### 5. バージョン更新
 
 `<SEMVER_ENABLED> == false` の場合、このステップ全体をスキップする（Step 6 に進む）。
 
 `<SEMVER_ENABLED> == true` の場合、`<VERSION_FILE>` を `<VERSION_BUMP_POLICY>` に従って更新する。
 バンプ方針はプロジェクトの CLAUDE.md に記述があればそれに従い、なければ SemVer 2.0.0 の標準ルールに従う（新機能 → MINOR、バグ修正・リファクタ → PATCH、破壊的変更 → MAJOR）。
+
+##### バージョンバンプ承認ゲート（必須）
+
+更新前にユーザーへ以下を提示し、明示的な承認を得てから更新・コミット・タグ作成を行う:
+
+```
+【バージョンバンプ案】
+■ 現バージョン: <現在の値>
+■ 新バージョン: <X.Y.Z>
+■ 根拠（バンプ種別）: MINOR / PATCH / MAJOR — <理由>
+■ コミットメッセージ案: v<X.Y.Z>: <変更内容の要約>
+■ 作成タグ: v<X.Y.Z>
+
+この内容でバージョンを更新・コミット・タグ作成してよろしいですか？
+```
+
+ユーザーが承認するまでファイル変更・コミット・タグ作成を実行しない。修正指示があれば反映してから再確認する。
 
 **言語別の更新手順:**
 
@@ -297,6 +390,24 @@ git tag v<X.Y.Z>
 
 ### 6. develop へマージ
 
+##### マージ承認ゲート（必須）
+
+マージを実行する前に、ユーザーへ以下を提示し、明示的な承認を得てから `git merge` を実行する。
+
+```
+【develop へのマージ準備完了】
+■ マージ元: feature/<ブランチ名>
+■ マージ先: develop
+■ 含まれるコミット:
+  <git log develop..feature/<ブランチ名> --oneline の結果>
+■ 変更ファイル数: <git diff develop..feature/<ブランチ名> --stat の要約>
+
+このまま develop にマージし、feature ブランチを削除してよろしいですか？
+（修正したい場合はマージせず指示してください）
+```
+
+承認後に以下を実行する:
+
 ```bash
 git checkout develop
 git merge --no-ff feature/<ブランチ名> -m "Merge feature/<ブランチ名> into develop"
@@ -305,7 +416,21 @@ git branch -d feature/<ブランチ名>
 
 ### 7. リモートへ push
 
-全コミット完了後、develop ブランチをリモートに push する。
+##### push 承認ゲート（必須）
+
+push 実行前に、ユーザーへ以下を提示し、明示的な承認を得てから `git push` を実行する。
+
+```
+【リモートへの push 準備完了】
+■ push 対象: origin/develop
+■ <SEMVER_ENABLED> == true の場合の追加タグ: v<X.Y.Z>
+■ ローカルとリモートの差分: <git log origin/develop..develop --oneline の結果>
+
+リモートへ push してよろしいですか？
+（push せずローカルに留めたい場合はその旨指示してください）
+```
+
+承認後、develop ブランチをリモートに push する。
 `<SEMVER_ENABLED> == true` でタグを作成した場合は、タグも一括 push する:
 
 ```bash
@@ -359,3 +484,16 @@ my-task done <タスクIDの数値>
 - タスク番号は `(#XX)` 形式でコミットメッセージに含める
 - `<TEST_CMD>` が通らない限り、マージに進まない
 - Generator と Evaluator は必ず別のサブエージェントで実行する（自己評価バイアスの防止）
+
+### 承認ゲート一覧（透明性とリスク管理のため必須）
+
+以下の地点では、ユーザーへ内容を**全文提示**したうえで明示的な承認を得るまで先に進まない:
+
+1. **Step 3a 終了時** — Planner の計画（変更対象ファイル・受け入れ基準・テスト方針）
+2. **Step 3c 各ラウンド終了時** — Evaluator の検証レポート（PASS/FAIL の全項目）
+3. **Step 3d** — FAIL 時の差し戻し方針選択（再 Generator / 自分で指示 / 中断）／PASS 時の続行確認
+4. **Step 5** — バージョンバンプ案（新バージョン・コミットメッセージ・タグ）
+5. **Step 6** — develop へのマージ（マージ元・マージ先・含まれるコミット一覧）
+6. **Step 7** — リモートへの push（push 対象とローカル/リモート差分）
+
+Generator が feature ブランチに対して行うコミットは、上記ゲートの対象外（feature は隔離されているため）。それ以外の状態変更（develop 改変・タグ作成・push）は必ずユーザー承認後に実行する。
