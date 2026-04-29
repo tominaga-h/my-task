@@ -79,6 +79,26 @@ git checkout -b feature/<タスク内容を表す短い英語名>
 
 **重要**: この確定作業は開発サイクルの最初に **1 回だけ** 行う。以降のステップやサブエージェント（Planner/Generator/Evaluator）に対しては、ここで確定したプレースホルダ値を渡すだけとし、毎ステップで同じ質問を繰り返さないこと。
 
+さらに、過去の dev-cycle 実行で CLAUDE.md にツールチェーン定義が永続化されていれば、それを再利用して検出処理自体をスキップする。
+
+#### 2.5-pre. CLAUDE.md からのツールチェーン再利用（最優先）
+
+リポジトリルートの `CLAUDE.md` を `Read` し、以下のマーカー付きブロックの有無を確認する:
+
+```markdown
+<!-- dev-cycle:toolchain start -->
+...
+<!-- dev-cycle:toolchain end -->
+```
+
+**ブロックが存在する場合:**
+- ブロック内に記載された `<TEST_CMD>` / `<BUILD_CMD>` / `<LINT_CMD>` / `<CHECK_CMD>` / `<VERSION_FILE>` / `<VERSION_BUMP_POLICY>` / `<SEMVER_ENABLED>` をそのまま採用する
+- **2.5a〜2.5e はスキップ**して 2.5f に進む（再質問しない）
+- ただしユーザーが明示的に「ツールチェーンを再確認したい」「CLAUDE.md の定義を更新したい」等を指示した場合は、ブロックを無視して 2.5a から実行する
+
+**ブロックが存在しない場合:**
+- 通常通り 2.5a 以降を実行する。確定後、2.5g で CLAUDE.md にブロックを追記する
+
 #### 2.5a. プロジェクト種別の自動検出
 
 リポジトリルート直下のマニフェストファイルを `Glob` / `Read` で確認し、以下の表に従ってプロジェクト種別を判定する。
@@ -148,6 +168,42 @@ git checkout -b feature/<タスク内容を表す短い英語名>
 - `<VERSION_FILE>` — バージョン記述ファイル（Rust なら `Cargo.toml`、Node なら `package.json`、Python なら `pyproject.toml` 等）
 - `<VERSION_BUMP_POLICY>` — バージョンバンプ方針（CLAUDE.md に記述があればそれに従う。なければ SemVer 2.0.0 の標準ルール）
 - `<SEMVER_ENABLED>` — SemVer 運用の有無（`true` / `false`）
+
+#### 2.5g. CLAUDE.md への永続化
+
+2.5-pre でブロックを再利用しなかった場合（＝今回新たに検出 / 確認した場合）に限り、確定したツールチェーンを CLAUDE.md に追記して次回以降の検出処理をスキップ可能にする。
+
+**手順:**
+
+1. リポジトリルートの `CLAUDE.md` を `Read` する。存在しない場合は作成する。
+2. ファイル内に `<!-- dev-cycle:toolchain start -->` 〜 `<!-- dev-cycle:toolchain end -->` のブロックがあるか確認する:
+   - **既存ブロックあり、かつ内容が今回の確定値と一致**: 何もしない（再利用パスで来ているはずなのでここに到達することは少ない）
+   - **既存ブロックあり、内容が異なる**: ブロック内を今回の確定値で上書き更新する
+   - **既存ブロックなし**: ファイル末尾に新規追加する
+3. ブロックのフォーマットは以下に統一する:
+
+   ```markdown
+   <!-- dev-cycle:toolchain start -->
+   ## dev-cycle ツールチェーン定義（自動生成）
+
+   このセクションは `/task-dev-cycle` スキルにより自動管理されている。手動編集は可能だが、フォーマット（マーカーとキー名）は変更しないこと。再検出させたい場合はブロックごと削除する。
+
+   - `<TEST_CMD>`: `<確定値>`
+   - `<BUILD_CMD>`: `<確定値>`
+   - `<LINT_CMD>`: `<確定値>`
+   - `<CHECK_CMD>`: `<確定値（なければ空）>`
+   - `<VERSION_FILE>`: `<確定値>`
+   - `<VERSION_BUMP_POLICY>`: `<確定値>`
+   - `<SEMVER_ENABLED>`: `<true | false>`
+   - 検出日: `<YYYY-MM-DD>`
+   <!-- dev-cycle:toolchain end -->
+   ```
+
+4. CLAUDE.md の変更はこの dev-cycle 内で行う他のコミット（feature ブランチ上のタスク実装コミット）に同梱して構わない。タスクと関係ない単独コミットを増やさないこと。
+
+**注意:**
+- 値が空のキー（例: `<CHECK_CMD>`）も省略せず空文字 `` ` ` `` で必ず記載する。次回読み込み時にキー欠落と区別できるようにするため。
+- このブロックを書き込むことで、次回 `/task-dev-cycle` 起動時は 2.5-pre で検出され、2.5a〜2.5e の自動検出・AskUserQuestion 一式がスキップされる。
 
 ### 3. ハーネス実行（Planner → Generator → Evaluator）
 
