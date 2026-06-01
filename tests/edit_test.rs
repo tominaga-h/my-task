@@ -434,3 +434,33 @@ fn test_edit_no_remind_only() {
         .success()
         .stdout(predicate::str::contains("Updated: #1"));
 }
+
+#[test]
+fn test_edit_interactive_with_no_remind_conflict() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path).args(["add", "Task"]).assert().success();
+
+    // -i (--interactive) cannot be combined with --no-remind
+    cmd(&db_path)
+        .args(["edit", "1", "-i", "--no-remind"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--interactive"));
+}
+
+#[test]
+fn test_edit_interactive_with_remove_remind_conflict() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path).args(["add", "Task"]).assert().success();
+
+    // -i (--interactive) cannot be combined with --remove-remind
+    cmd(&db_path)
+        .args(["edit", "1", "-i", "--remove-remind", "2026-04-10"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--interactive"));
+}
