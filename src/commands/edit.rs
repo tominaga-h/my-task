@@ -29,6 +29,14 @@ pub struct EditArgs {
     #[arg(short, long)]
     pub remind: Option<String>,
 
+    /// Clear all reminds
+    #[arg(long, conflicts_with_all = ["remind", "remove_remind"])]
+    pub no_remind: bool,
+
+    /// Remove a single remind by date (YYYY-MM-DD, 今日, 明日, 来週, 月曜〜日曜, etc.)
+    #[arg(long, conflicts_with_all = ["remind", "no_remind"])]
+    pub remove_remind: Option<String>,
+
     /// Mark task as important
     #[arg(long)]
     pub important: bool,
@@ -52,11 +60,13 @@ pub fn run(args: EditArgs) {
             || args.project.is_some()
             || args.due.is_some()
             || args.remind.is_some()
+            || args.no_remind
+            || args.remove_remind.is_some()
             || args.important
             || args.no_important
         {
             eprintln!(
-                "Error: --interactive cannot be used with --title, --project, --due, --remind, --important, --no-important"
+                "Error: --interactive cannot be used with --title, --project, --due, --remind, --no-remind, --remove-remind, --important, --no-important"
             );
             std::process::exit(1);
         }
@@ -79,11 +89,13 @@ fn run_flag(args: EditArgs) {
         && args.project.is_none()
         && args.due.is_none()
         && args.remind.is_none()
+        && !args.no_remind
+        && args.remove_remind.is_none()
         && !args.important
         && !args.no_important
     {
         eprintln!(
-            "Error: specify at least one field to edit (--title, --project, --due, --remind, --important, --no-important)"
+            "Error: specify at least one field to edit (--title, --project, --due, --remind, --no-remind, --remove-remind, --important, --no-important)"
         );
         std::process::exit(1);
     }
@@ -136,6 +148,16 @@ fn run_flag(args: EditArgs) {
         })
     });
 
+    let remove_remind = args.remove_remind.as_ref().map(|s| {
+        date_parser::parse_fuzzy_date(s).unwrap_or_else(|| {
+            eprintln!(
+                "Error: invalid remind date '{}'. Use: YYYY-MM-DD, 今日, 明日, 来週, 曜日名 etc.",
+                s
+            );
+            std::process::exit(1);
+        })
+    });
+
     let today = Local::now().date_naive();
 
     let important = if args.important {
@@ -167,6 +189,25 @@ fn run_flag(args: EditArgs) {
         if db::add_remind(&conn, id, remind_date).is_err() {
             eprintln!("Error: failed to write database: {}", db_path.display());
             std::process::exit(1);
+        }
+    }
+
+    if args.no_remind && db::delete_reminds_for_task(&conn, id).is_err() {
+        eprintln!("Error: failed to write database: {}", db_path.display());
+        std::process::exit(1);
+    }
+
+    if let Some(remove_date) = remove_remind {
+        match db::delete_remind(&conn, id, remove_date) {
+            Ok(0) => {
+                eprintln!("Error: task #{} has no remind on {}", id, remove_date);
+                std::process::exit(1);
+            }
+            Ok(_) => {}
+            Err(_) => {
+                eprintln!("Error: failed to write database: {}", db_path.display());
+                std::process::exit(1);
+            }
         }
     }
 
