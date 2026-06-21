@@ -38,8 +38,8 @@ pub fn run(args: CloseArgs) {
         std::process::exit(1);
     }
 
-    let today = Local::now().date_naive();
-    if db::close_task(&conn, args.id, today).is_err() {
+    let now = Local::now().naive_local();
+    if db::close_task(&conn, args.id, now).is_err() {
         eprintln!("Error: failed to write database: {}", db_path.display());
         std::process::exit(1);
     }

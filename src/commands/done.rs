@@ -22,7 +22,7 @@ pub fn run(args: DoneArgs) {
         }
     };
 
-    let today = Local::now().date_naive();
+    let now = Local::now().naive_local();
     let mut has_error = false;
 
     for id in &args.ids {
@@ -46,7 +46,7 @@ pub fn run(args: DoneArgs) {
             continue;
         }
 
-        if db::complete_task(&conn, *id, today).is_err() {
+        if db::complete_task(&conn, *id, now).is_err() {
             eprintln!("Error: failed to write database: {}", db_path.display());
             has_error = true;
             continue;

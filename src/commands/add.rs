@@ -52,13 +52,13 @@ pub fn run(args: AddArgs) {
         }
     };
 
-    let today = Local::now().date_naive();
+    let now = Local::now().naive_local();
     let id = match db::add_task(
         &conn,
         &args.title,
         args.project.as_deref(),
         due,
-        today,
+        now,
         args.important,
     ) {
         Ok(id) => id,

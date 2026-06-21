@@ -1,4 +1,4 @@
-use chrono::NaiveDate;
+use chrono::{NaiveDate, NaiveDateTime};
 
 #[derive(Debug, Clone)]
 pub struct Task {
@@ -7,12 +7,12 @@ pub struct Task {
     pub status: Status,
     #[allow(dead_code)]
     pub source: String,
-    pub created: NaiveDate,
+    pub created: NaiveDateTime,
     pub project: Option<String>,
     pub due: Option<NaiveDate>,
-    pub done_at: Option<NaiveDate>,
+    pub done_at: Option<NaiveDateTime>,
     #[allow(dead_code)]
-    pub updated: NaiveDate,
+    pub updated: NaiveDateTime,
     pub reminds: Vec<NaiveDate>,
     pub important: bool,
 }
