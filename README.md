@@ -113,7 +113,7 @@ my-task list -f                  # Follow: full-screen, auto-refreshing view (q 
 my-task list -f --interval 5     # Refresh every 5 seconds
 ```
 
-In follow mode the list is shown full-screen and refreshes automatically. Press `q` (or `Esc` / `Ctrl-C`) to quit, or `r` to refresh immediately. Follow mode requires a TTY; when output is piped/redirected it prints the list once and exits.
+In follow mode the list is shown full-screen and refreshes automatically. Press `q` (or `Esc` / `Ctrl-C`) to quit, or `r` to refresh immediately. When the list is taller than the terminal, scroll with `j` / `↓` (down) and `k` / `↑` (up); a `[start-end/total]` indicator at the bottom shows the current range. The scroll position is kept across auto-refreshes. Follow mode requires a TTY; when output is piped/redirected it prints the list once and exits.
 
 ![DEMO](./images/demo-list.png)
 
@@ -276,7 +276,7 @@ List tasks in a table. Alias: `my-task ls`
 | `--project <NAME>` | `-P` | — | Filter by project name |
 | `--sort <KEY>` | `-s` | `id` | Sort by: `id`, `due`, `project`, `created` (`age` is alias for `created`). Repeatable for multi-key sort |
 | `--important-only` | — | `false` | Show only important tasks |
-| `--follow` | `-f` | `false` | Full-screen, auto-refreshing view. Press `q`/`Esc`/`Ctrl-C` to quit, `r` to refresh now. Requires a TTY (prints once when piped) |
+| `--follow` | `-f` | `false` | Full-screen, auto-refreshing view. Press `q`/`Esc`/`Ctrl-C` to quit, `r` to refresh now, `j`/`k` (or `↓`/`↑`) to scroll. Requires a TTY (prints once when piped) |
 | `--interval <SECS>` | — | `2` | Polling interval (seconds) for follow mode |
 
 **Display rules:**
