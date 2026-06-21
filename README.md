@@ -1,6 +1,6 @@
 # my-task
 
-![version](https://img.shields.io/badge/version-1.3.0-blue)
+![version](https://img.shields.io/badge/version-1.6.1-blue)
 
 A simple CLI task manager powered by SQLite.
 
@@ -84,6 +84,9 @@ my-task done 1
 ```bash
 my-task edit 5 --title "New title"
 my-task edit 5 --project new-proj --due friday
+my-task edit 5 --remind 2026-04-10        # Add a remind
+my-task edit 5 --remove-remind 2026-04-10 # Remove a single remind
+my-task edit 5 --no-remind                # Clear all reminds
 ```
 
 #### Interactive mode (editor)
@@ -106,7 +109,11 @@ my-task list -P my-app       # Filter by project
 my-task list --sort due      # Sort by: id, due, project, created
 my-task list --sort project --sort due  # Multiple sort keys
 my-task list --important-only    # Important tasks only
+my-task list -f                  # Follow: full-screen, auto-refreshing view (q to quit)
+my-task list -f --interval 5     # Refresh every 5 seconds
 ```
+
+In follow mode the list is shown full-screen and refreshes automatically. Press `q` (or `Esc` / `Ctrl-C`) to quit, or `r` to refresh immediately. When the list is taller than the terminal, scroll with `j` / `↓` (down) and `k` / `↑` (up); a `[start-end/total]` indicator at the bottom shows the current range. The scroll position is kept across auto-refreshes. Follow mode requires a TTY; when output is piped/redirected it prints the list once and exits.
 
 ![DEMO](./images/demo-list.png)
 
@@ -215,19 +222,23 @@ Edit an existing task. Two modes are available:
 
 #### Flag mode
 
-Requires `<ID>` and at least one of `--title`, `--project`, `--due`, `--important`, or `--no-important`.
+Requires `<ID>` and at least one of `--title`, `--project`, `--due`, `--remind`, `--no-remind`, `--remove-remind`, `--important`, or `--no-important`.
 
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--title <TEXT>` | `-t` | Set new title (must not be empty) |
 | `--project <NAME>` | `-p` | Set new project name |
 | `--due <DATE>` | `-d` | Set new due date (YYYY-MM-DD or fuzzy input) |
+| `--remind <DATE>` | `-r` | Add a remind date (YYYY-MM-DD or fuzzy input) |
+| `--no-remind` | — | Clear all reminds |
+| `--remove-remind <DATE>` | — | Remove a single remind by date (YYYY-MM-DD or fuzzy input) |
 | `--important` | — | Set important flag |
 | `--no-important` | — | Remove important flag |
 
 - `--important` and `--no-important` cannot be used together.
+- `--remind`, `--no-remind`, and `--remove-remind` are mutually exclusive.
 - Output: `Updated: #<ID> <TITLE>`
-- Exit code `1` if no flags given, task not found, or title is empty.
+- Exit code `1` if no flags given, task not found, title is empty, an invalid date is supplied, or `--remove-remind` targets a date with no matching remind.
 
 #### Interactive mode (`-i` / `--interactive`)
 
@@ -242,7 +253,7 @@ Opens `$EDITOR` (fallback: `vi`) with tasks in YAML format.
 - Deleting a task block in the editor **closes** that task (sets status to `closed`).
 - Only changed tasks are updated. Unchanged tasks are skipped.
 - Output: `Updated N tasks`, `Closed N tasks`, or `No changes`
-- `-i` cannot be combined with `--title`, `--project`, `--due`, `--important`, or `--no-important`.
+- `-i` cannot be combined with `--title`, `--project`, `--due`, `--remind`, `--no-remind`, `--remove-remind`, `--important`, or `--no-important`.
 
 ### `my-task notify [OPTIONS]`
 
@@ -265,6 +276,8 @@ List tasks in a table. Alias: `my-task ls`
 | `--project <NAME>` | `-P` | — | Filter by project name |
 | `--sort <KEY>` | `-s` | `id` | Sort by: `id`, `due`, `project`, `created` (`age` is alias for `created`). Repeatable for multi-key sort |
 | `--important-only` | — | `false` | Show only important tasks |
+| `--follow` | `-f` | `false` | Full-screen, auto-refreshing view. Press `q`/`Esc`/`Ctrl-C` to quit, `r` to refresh now, `j`/`k` (or `↓`/`↑`) to scroll. Requires a TTY (prints once when piped) |
+| `--interval <SECS>` | — | `2` | Polling interval (seconds) for follow mode |
 
 **Display rules:**
 - Important tasks: title in magenta bold.

@@ -368,6 +368,19 @@ pub fn delete_reminds_for_task(conn: &Connection, task_id: u32) -> Result<(), ru
     Ok(())
 }
 
+pub fn delete_remind(
+    conn: &Connection,
+    task_id: u32,
+    remind_at: NaiveDate,
+) -> Result<usize, rusqlite::Error> {
+    let remind_str = remind_at.to_string();
+    let deleted = conn.execute(
+        "DELETE FROM task_reminds WHERE task_id = ?1 AND remind_at = ?2",
+        params![task_id, remind_str],
+    )?;
+    Ok(deleted)
+}
+
 pub fn search_tasks(
     conn: &Connection,
     keyword: &str,
@@ -753,6 +766,44 @@ mod tests {
         delete_reminds_for_task(&conn, id).unwrap();
         let reminds = get_reminds_for_task(&conn, id).unwrap();
         assert!(reminds.is_empty());
+    }
+
+    #[test]
+    fn test_delete_remind_single() {
+        let conn = open_in_memory().unwrap();
+        let t = today();
+        let id = add_task(&conn, "Task", None, None, t, false).unwrap();
+
+        let r1 = NaiveDate::from_ymd_opt(2026, 4, 10).unwrap();
+        let r2 = NaiveDate::from_ymd_opt(2026, 4, 15).unwrap();
+        add_remind(&conn, id, r1).unwrap();
+        add_remind(&conn, id, r2).unwrap();
+
+        let deleted = delete_remind(&conn, id, r1).unwrap();
+        assert_eq!(deleted, 1);
+
+        let reminds = get_reminds_for_task(&conn, id).unwrap();
+        assert_eq!(reminds.len(), 1);
+        assert_eq!(reminds[0], r2);
+        assert!(!reminds.contains(&r1));
+    }
+
+    #[test]
+    fn test_delete_remind_not_found() {
+        let conn = open_in_memory().unwrap();
+        let t = today();
+        let id = add_task(&conn, "Task", None, None, t, false).unwrap();
+
+        let r1 = NaiveDate::from_ymd_opt(2026, 4, 10).unwrap();
+        add_remind(&conn, id, r1).unwrap();
+
+        let missing = NaiveDate::from_ymd_opt(2026, 4, 20).unwrap();
+        let deleted = delete_remind(&conn, id, missing).unwrap();
+        assert_eq!(deleted, 0);
+
+        let reminds = get_reminds_for_task(&conn, id).unwrap();
+        assert_eq!(reminds.len(), 1);
+        assert_eq!(reminds[0], r1);
     }
 
     #[test]

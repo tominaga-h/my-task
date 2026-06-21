@@ -511,3 +511,64 @@ fn test_list_important_only_no_results() {
             "No tasks. Add one with: my-task add \"task title\"",
         ));
 }
+
+#[test]
+fn test_list_help_shows_follow_and_interval() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["list", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--follow"))
+        .stdout(predicate::str::contains("--interval"));
+}
+
+#[test]
+fn test_ls_help_shows_follow_and_interval() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["ls", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--follow"))
+        .stdout(predicate::str::contains("--interval"));
+}
+
+#[test]
+fn test_follow_non_tty_falls_back_to_single_render() {
+    // In a pipe (no TTY), `-f` must not hang and must print list-like output.
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["add", "Follow fallback task"])
+        .assert()
+        .success();
+
+    // assert_cmd captures stdout via a pipe => stdout is not a TTY.
+    cmd(&db_path)
+        .args(["ls", "-f"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Follow fallback task"))
+        .stdout(predicate::str::contains("1 tasks"));
+}
+
+#[test]
+fn test_follow_non_tty_empty_db() {
+    // Non-TTY fallback with no tasks should print the empty message and exit 0.
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["list", "-f"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "No tasks. Add one with: my-task add \"task title\"",
+        ));
+}

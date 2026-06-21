@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.1] - 2026-06-21
+
+### Added
+
+- `list --follow` / `-f`: 全画面で自動更新する常駐ビューを追加（ポーリング方式・`ls -f` 対応） (#165)
+- `list --interval <SECS>`: フォローモードのポーリング間隔を指定（デフォルト2秒） (#165)
+- フォローモードの縦スクロール: `j`/`↓`・`k`/`↑` でスクロール、`[start-end/total]` 位置インジケータ表示、自動更新をまたいでスクロール位置を維持 (#165)
+- `edit --no-remind`: タスクのリマインドをすべて削除 (#187)
+- `edit --remove-remind <DATE>`: 指定した日付のリマインドを1件削除 (#187)
+
+### Changed
+
+- フォローモードは TTY が必要。パイプ／リダイレクト時は一覧を1回出力して終了 (#165)
+
 ## [1.3.0] - 2026-04-08
 
 ### Added

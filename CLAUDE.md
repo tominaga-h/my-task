@@ -77,3 +77,19 @@ Semantic Versioning 2.0.0 に準拠する。
 
 - コミットメッセージは日本語で記述する
 - 関連するタスク番号がある場合は `(#番号)` を含める
+
+<!-- dev-cycle:toolchain start -->
+
+## dev-cycle ツールチェーン定義（自動生成）
+
+このセクションは `/task-dev-cycle` スキルにより自動管理されている。手動編集は可能だが、フォーマット（マーカーとキー名）は変更しないこと。再検出させたい場合はブロックごと削除する。
+
+- `<TEST_CMD>`: `cargo test --all-targets`
+- `<BUILD_CMD>`: `cargo build`
+- `<LINT_CMD>`: `cargo fmt --all && cargo clippy --all-targets -- -D warnings`
+- `<CHECK_CMD>`: `make check`
+- `<VERSION_FILE>`: `Cargo.toml`
+- `<VERSION_BUMP_POLICY>`: `CLAUDE.md の「バージョン管理」節に従う（新機能→MINOR、バグ修正・リファクタ→PATCH、破壊的変更→MAJOR）`
+- `<SEMVER_ENABLED>`: `true`
+- 検出日: `2026-06-01`
+<!-- dev-cycle:toolchain end -->
