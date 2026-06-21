@@ -36,18 +36,27 @@ pub struct ListArgs {
     /// Show only important tasks
     #[arg(long)]
     pub important_only: bool,
+
+    /// Follow mode: full-screen, auto-refreshing view (q to quit; requires a TTY)
+    #[arg(short = 'f', long)]
+    pub follow: bool,
+
+    /// Polling interval in seconds for follow mode
+    #[arg(long, default_value_t = 2, value_name = "SECS")]
+    pub interval: u64,
 }
 
-pub fn run(args: ListArgs) {
-    let db_path = config::db_path();
-    let conn = match db::open(&db_path) {
-        Ok(c) => c,
-        Err(_) => {
-            eprintln!("Error: failed to write database: {}", db_path.display());
-            std::process::exit(1);
-        }
-    };
+/// Resolved query parameters extracted from `ListArgs`.
+pub struct ListQuery {
+    pub all: bool,
+    pub project: Option<String>,
+    pub sorts: Vec<SortKey>,
+    pub order: SortOrder,
+    pub important_only: bool,
+}
 
+/// Resolve sort keys / order from `ListArgs`. Exits the process on an unknown sort key.
+pub fn resolve_query(args: &ListArgs) -> ListQuery {
     let sorts: Vec<SortKey> = args
         .sort
         .iter()
@@ -72,13 +81,39 @@ pub fn run(args: ListArgs) {
         SortOrder::Asc
     };
 
+    ListQuery {
+        all: args.all,
+        project: args.project.clone(),
+        sorts,
+        order,
+        important_only: args.important_only,
+    }
+}
+
+pub fn run(args: ListArgs) {
+    if args.follow {
+        crate::commands::follow::run_follow(&args);
+        return;
+    }
+
+    let db_path = config::db_path();
+    let conn = match db::open(&db_path) {
+        Ok(c) => c,
+        Err(_) => {
+            eprintln!("Error: failed to write database: {}", db_path.display());
+            std::process::exit(1);
+        }
+    };
+
+    let query = resolve_query(&args);
+
     let tasks = match db::list_tasks(
         &conn,
-        args.all,
-        args.project.as_deref(),
-        &sorts,
-        order,
-        args.important_only,
+        query.all,
+        query.project.as_deref(),
+        &query.sorts,
+        query.order,
+        query.important_only,
     ) {
         Ok(t) => t,
         Err(_) => {
@@ -102,15 +137,32 @@ pub fn print_task_table(tasks: &[Task], all: bool, conn: &rusqlite::Connection) 
         task.reminds = db::get_reminds_for_task(conn, task.id).unwrap_or_default();
     }
 
+    let project_colors = build_project_color_map(&tasks);
+    let term_width = terminal_size().map(|(Width(w), _)| w).unwrap_or(80);
+
+    let rendered = build_task_table_string(&tasks, all, &project_colors, term_width);
+    println!("{rendered}");
+}
+
+/// Build the rendered task table (table + footer) as a pure string.
+///
+/// This function performs no I/O and contains no randomness: the project color
+/// map is supplied by the caller, so given the same inputs it always returns the
+/// same output. The non-follow path generates a fresh (random) color map per
+/// call to preserve historical behavior, while the follow loop generates one map
+/// up front and reuses it to avoid flicker.
+pub fn build_task_table_string(
+    tasks: &[Task],
+    all: bool,
+    project_colors: &std::collections::HashMap<String, Color>,
+    term_width: u16,
+) -> String {
     let today = Local::now().date_naive();
     let done_count = tasks
         .iter()
         .filter(|t| t.status == Status::Done || t.status == Status::Closed)
         .count();
 
-    let project_colors = build_project_color_map(&tasks);
-
-    let term_width = terminal_size().map(|(Width(w), _)| w).unwrap_or(80);
     let compact = term_width < NARROW_THRESHOLD;
 
     let mut table = Table::new();
@@ -138,7 +190,7 @@ pub fn print_task_table(tasks: &[Task], all: bool, conn: &rusqlite::Connection) 
         ]);
     }
 
-    for task in &tasks {
+    for task in tasks {
         let is_done = task.status == Status::Done;
         let is_closed = task.status == Status::Closed;
         let is_inactive = is_done || is_closed;
@@ -298,14 +350,13 @@ pub fn print_task_table(tasks: &[Task], all: bool, conn: &rusqlite::Connection) 
         age_col.set_cell_alignment(CellAlignment::Right);
     }
 
-    println!("{table}");
-
-    println!();
-    if all && done_count > 0 {
-        println!("{} tasks ({} done)", tasks.len(), done_count);
+    let footer = if all && done_count > 0 {
+        format!("{} tasks ({} done)", tasks.len(), done_count)
     } else {
-        println!("{} tasks", tasks.len());
-    }
+        format!("{} tasks", tasks.len())
+    };
+
+    format!("{table}\n\n{footer}")
 }
 
 const PROJECT_PALETTE: &[Color] = &[
@@ -361,7 +412,7 @@ const PROJECT_PALETTE: &[Color] = &[
     }, // turquoise
 ];
 
-fn build_project_color_map(
+pub fn build_project_color_map(
     tasks: &[crate::model::Task],
 ) -> std::collections::HashMap<String, Color> {
     use rand::Rng;
@@ -376,4 +427,134 @@ fn build_project_color_map(
         }
     }
     map
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::NaiveDate;
+    use std::collections::HashMap;
+
+    fn day(y: i32, m: u32, d: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(y, m, d).unwrap()
+    }
+
+    fn make_task(id: u32, title: &str, status: Status) -> Task {
+        Task {
+            id,
+            title: title.to_string(),
+            status,
+            source: "manual".to_string(),
+            created: day(2026, 6, 1),
+            project: None,
+            due: None,
+            done_at: None,
+            updated: day(2026, 6, 1),
+            reminds: Vec::new(),
+            important: false,
+        }
+    }
+
+    // Wide enough that the full (non-compact) layout is used.
+    const WIDE: u16 = 120;
+
+    #[test]
+    fn test_build_string_contains_core_fields() {
+        let mut open = make_task(1, "Write report", Status::Open);
+        open.project = Some("alpha".to_string());
+        open.due = Some(day(2026, 7, 10));
+        open.reminds = vec![day(2026, 7, 8)];
+
+        let done = make_task(2, "Old chore", Status::Done);
+        let closed = make_task(3, "Abandoned", Status::Closed);
+
+        let tasks = vec![open, done, closed];
+        let colors: HashMap<String, Color> = HashMap::new();
+
+        let out = build_task_table_string(&tasks, true, &colors, WIDE);
+
+        assert!(out.contains("#1"));
+        assert!(out.contains("#2"));
+        assert!(out.contains("#3"));
+        assert!(out.contains("Write report"));
+        assert!(out.contains("Old chore"));
+        assert!(out.contains("Abandoned"));
+        assert!(out.contains("OPEN"));
+        assert!(out.contains("DONE"));
+        assert!(out.contains("CLOSED"));
+        // due 7/10 and remind 7/8
+        assert!(out.contains("7/10"));
+        assert!(out.contains("7/8"));
+    }
+
+    #[test]
+    fn test_build_string_footer_plain() {
+        let tasks = vec![
+            make_task(1, "One", Status::Open),
+            make_task(2, "Two", Status::Open),
+        ];
+        let colors: HashMap<String, Color> = HashMap::new();
+
+        let out = build_task_table_string(&tasks, false, &colors, WIDE);
+        assert!(out.contains("2 tasks"));
+        assert!(!out.contains("done)"));
+    }
+
+    #[test]
+    fn test_build_string_footer_with_done_count() {
+        let tasks = vec![
+            make_task(1, "Open one", Status::Open),
+            make_task(2, "Done one", Status::Done),
+            make_task(3, "Closed one", Status::Closed),
+        ];
+        let colors: HashMap<String, Color> = HashMap::new();
+
+        // all = true and there are inactive tasks -> "N tasks (M done)"
+        let out = build_task_table_string(&tasks, true, &colors, WIDE);
+        assert!(out.contains("3 tasks (2 done)"));
+    }
+
+    #[test]
+    fn test_build_string_empty_tasks() {
+        let tasks: Vec<Task> = Vec::new();
+        let colors: HashMap<String, Color> = HashMap::new();
+
+        let out = build_task_table_string(&tasks, false, &colors, WIDE);
+        // No rows -> footer reports zero tasks.
+        assert!(out.contains("0 tasks"));
+    }
+
+    #[test]
+    fn test_build_string_compact_layout() {
+        // term_width below NARROW_THRESHOLD switches to the 3-column compact view.
+        let narrow = NARROW_THRESHOLD - 1;
+        let mut t = make_task(1, "Compact task", Status::Open);
+        t.project = Some("proj".to_string());
+        let tasks = vec![t];
+        let colors: HashMap<String, Color> = HashMap::new();
+
+        let out = build_task_table_string(&tasks, false, &colors, narrow);
+        // Compact header has ID/Title/Due but not Status/Project/Remind/Age columns.
+        assert!(out.contains("Title"));
+        assert!(out.contains("Due"));
+        assert!(!out.contains("Status"));
+        assert!(!out.contains("Remind"));
+        assert!(!out.contains("Age"));
+        assert!(out.contains("Compact task"));
+        assert!(out.contains("1 tasks"));
+    }
+
+    #[test]
+    fn test_build_string_is_deterministic() {
+        let mut t = make_task(1, "Stable", Status::Open);
+        t.project = Some("alpha".to_string());
+        let tasks = vec![t];
+
+        let mut colors: HashMap<String, Color> = HashMap::new();
+        colors.insert("alpha".to_string(), Color::Cyan);
+
+        let a = build_task_table_string(&tasks, false, &colors, WIDE);
+        let b = build_task_table_string(&tasks, false, &colors, WIDE);
+        assert_eq!(a, b);
+    }
 }
