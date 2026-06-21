@@ -20,6 +20,7 @@ clap = { version = "4", features = ["derive"] }
 rusqlite = { version = "0.31", features = ["bundled"] }
 chrono = "0.4"
 comfy-table = { version = "7", features = ["custom_styling"] }
+crossterm = "0.29"
 rand = "0.9"
 dirs = "6"
 terminal_size = "0.4"
