@@ -41,7 +41,12 @@ impl TerminalGuard {
     fn enter() -> std::io::Result<Self> {
         enable_raw_mode()?;
         let mut stdout = std::io::stdout();
-        execute!(stdout, EnterAlternateScreen, Hide)?;
+        if let Err(e) = execute!(stdout, EnterAlternateScreen, Hide) {
+            // Undo raw mode so the terminal is not left in a half-entered state
+            // when entering the alternate screen fails.
+            let _ = disable_raw_mode();
+            return Err(e);
+        }
         Ok(TerminalGuard)
     }
 }
