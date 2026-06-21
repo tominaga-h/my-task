@@ -63,7 +63,7 @@ fn insert_task(
     };
     conn.execute(
         "INSERT INTO tasks (title, status, source, project_id, due, created, updated)
-         VALUES (?1, ?2, 'private', ?3, ?4, '2026-03-01', '2026-03-01')",
+         VALUES (?1, ?2, 'private', ?3, ?4, '2026-03-01 00:00:00', '2026-03-01 00:00:00')",
         rusqlite::params![title, status, project_id, due],
     )
     .unwrap();

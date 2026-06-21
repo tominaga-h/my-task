@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.7.0] - 2026-06-21
+
+### Changed
+
+- タスクの `created` / `updated` / `done_at` を日付（`YYYY-MM-DD`）から日時（`YYYY-MM-DD HH:MM:SS`）に変更。`show`（text / `--json`）の出力も日時表示になる (#306)
+- 既存DBは初回オープン時に日付のみの値を `YYYY-MM-DD 00:00:00` へ自動正規化（冪等）。`due` とリマインド日付は従来どおり日付のまま (#306)
+
 ## [1.6.1] - 2026-06-21
 
 ### Added

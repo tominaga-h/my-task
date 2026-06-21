@@ -216,7 +216,7 @@ pub fn build_task_table_string(
         } else if is_closed {
             "closed".to_string()
         } else {
-            let days = (today - task.created).num_days();
+            let days = (today - task.created.date()).num_days();
             format!("{}d", days)
         };
 
@@ -316,7 +316,7 @@ pub fn build_task_table_string(
                 Cell::new(due_text)
             };
 
-            let days = (today - task.created).num_days();
+            let days = (today - task.created.date()).num_days();
             let age_cell = if days > 30 {
                 Cell::new(age_text).fg(Color::Red)
             } else if days > 7 {
@@ -445,11 +445,11 @@ mod tests {
             title: title.to_string(),
             status,
             source: "manual".to_string(),
-            created: day(2026, 6, 1),
+            created: day(2026, 6, 1).and_hms_opt(0, 0, 0).unwrap(),
             project: None,
             due: None,
             done_at: None,
-            updated: day(2026, 6, 1),
+            updated: day(2026, 6, 1).and_hms_opt(0, 0, 0).unwrap(),
             reminds: Vec::new(),
             important: false,
         }
