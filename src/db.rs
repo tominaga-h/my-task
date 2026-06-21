@@ -233,21 +233,32 @@ pub fn list_tasks(
     conn: &Connection,
     all: bool,
     project: Option<&str>,
+    due: Option<NaiveDate>,
     sorts: &[SortKey],
     order: SortOrder,
     important_only: bool,
 ) -> Result<Vec<Task>, rusqlite::Error> {
     let base = tasks_select_sql();
-    let mut conditions = Vec::new();
+    let mut conditions: Vec<String> = Vec::new();
+    let mut values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+    let mut param_idx = 1u32;
+
     if !all {
-        conditions.push("t.status = 'open'");
+        conditions.push("t.status = 'open'".to_string());
     }
-    if project.is_some() {
-        conditions.push("p.name = ?1");
+    if let Some(p) = project {
+        conditions.push(format!("p.name = ?{}", param_idx));
+        values.push(Box::new(p.to_string()));
+        param_idx += 1;
+    }
+    if let Some(target) = due {
+        conditions.push(format!("t.due = ?{}", param_idx));
+        values.push(Box::new(target.to_string()));
     }
     if important_only {
-        conditions.push("t.important = 1");
+        conditions.push("t.important = 1".to_string());
     }
+
     let where_clause = if conditions.is_empty() {
         String::new()
     } else {
@@ -261,13 +272,10 @@ pub fn list_tasks(
     let sql = format!("{}{} ORDER BY {}", base, where_clause, order_clause);
 
     let mut stmt = conn.prepare(&sql)?;
-    let tasks: Vec<Task> = if let Some(p) = project {
-        stmt.query_map(params![p], row_to_task)?
-            .collect::<Result<Vec<_>, _>>()?
-    } else {
-        stmt.query_map([], row_to_task)?
-            .collect::<Result<Vec<_>, _>>()?
-    };
+    let params: Vec<&dyn rusqlite::types::ToSql> = values.iter().map(|v| v.as_ref()).collect();
+    let tasks: Vec<Task> = stmt
+        .query_map(params.as_slice(), row_to_task)?
+        .collect::<Result<Vec<_>, _>>()?;
     Ok(tasks)
 }
 
@@ -922,7 +930,16 @@ mod tests {
         add_task(&conn, "Important", None, None, t, true).unwrap();
         add_task(&conn, "Also normal", None, None, t, false).unwrap();
 
-        let tasks = list_tasks(&conn, false, None, &[SortKey::Id], SortOrder::Asc, true).unwrap();
+        let tasks = list_tasks(
+            &conn,
+            false,
+            None,
+            None,
+            &[SortKey::Id],
+            SortOrder::Asc,
+            true,
+        )
+        .unwrap();
         assert_eq!(tasks.len(), 1);
         assert_eq!(tasks[0].title, "Important");
         assert!(tasks[0].important);
@@ -1011,8 +1028,155 @@ mod tests {
         add_task(&conn, "Normal", None, None, t, false).unwrap();
         add_task(&conn, "Important", None, None, t, true).unwrap();
 
-        let tasks = list_tasks(&conn, false, None, &[SortKey::Id], SortOrder::Asc, false).unwrap();
+        let tasks = list_tasks(
+            &conn,
+            false,
+            None,
+            None,
+            &[SortKey::Id],
+            SortOrder::Asc,
+            false,
+        )
+        .unwrap();
         assert_eq!(tasks.len(), 2);
+    }
+
+    #[test]
+    fn test_list_tasks_filter_by_due() {
+        let conn = open_in_memory().unwrap();
+        let t = now();
+        let target = NaiveDate::from_ymd_opt(2026, 4, 15).unwrap();
+        let other = NaiveDate::from_ymd_opt(2026, 4, 16).unwrap();
+
+        add_task(&conn, "Due target", None, Some(target), t, false).unwrap();
+        add_task(&conn, "Due other", None, Some(other), t, false).unwrap();
+        add_task(&conn, "No due", None, None, t, false).unwrap();
+
+        let tasks = list_tasks(
+            &conn,
+            false,
+            None,
+            Some(target),
+            &[SortKey::Id],
+            SortOrder::Asc,
+            false,
+        )
+        .unwrap();
+        assert_eq!(tasks.len(), 1);
+        assert_eq!(tasks[0].title, "Due target");
+        assert_eq!(tasks[0].due, Some(target));
+    }
+
+    #[test]
+    fn test_list_tasks_due_and_project() {
+        let conn = open_in_memory().unwrap();
+        let t = now();
+        let target = NaiveDate::from_ymd_opt(2026, 4, 15).unwrap();
+
+        // Same due, different projects.
+        add_task(&conn, "Alpha due", Some("alpha"), Some(target), t, false).unwrap();
+        add_task(&conn, "Beta due", Some("beta"), Some(target), t, false).unwrap();
+        // Same project, different due.
+        let other = NaiveDate::from_ymd_opt(2026, 4, 16).unwrap();
+        add_task(&conn, "Alpha other", Some("alpha"), Some(other), t, false).unwrap();
+
+        let tasks = list_tasks(
+            &conn,
+            false,
+            Some("alpha"),
+            Some(target),
+            &[SortKey::Id],
+            SortOrder::Asc,
+            false,
+        )
+        .unwrap();
+        assert_eq!(tasks.len(), 1);
+        assert_eq!(tasks[0].title, "Alpha due");
+    }
+
+    #[test]
+    fn test_list_tasks_due_with_all() {
+        let conn = open_in_memory().unwrap();
+        let t = now();
+        let target = NaiveDate::from_ymd_opt(2026, 4, 15).unwrap();
+
+        let done_id = add_task(&conn, "Done due", None, Some(target), t, false).unwrap();
+        complete_task(&conn, done_id, t).unwrap();
+        let closed_id = add_task(&conn, "Closed due", None, Some(target), t, false).unwrap();
+        close_task(&conn, closed_id, t).unwrap();
+        add_task(&conn, "Open due", None, Some(target), t, false).unwrap();
+
+        // all = false: only the open task is returned.
+        let open_only = list_tasks(
+            &conn,
+            false,
+            None,
+            Some(target),
+            &[SortKey::Id],
+            SortOrder::Asc,
+            false,
+        )
+        .unwrap();
+        assert_eq!(open_only.len(), 1);
+        assert_eq!(open_only[0].title, "Open due");
+
+        // all = true: done/closed tasks with matching due are also returned.
+        let with_all = list_tasks(
+            &conn,
+            true,
+            None,
+            Some(target),
+            &[SortKey::Id],
+            SortOrder::Asc,
+            false,
+        )
+        .unwrap();
+        assert_eq!(with_all.len(), 3);
+    }
+
+    #[test]
+    fn test_list_tasks_due_none_unfiltered() {
+        let conn = open_in_memory().unwrap();
+        let t = now();
+        let target = NaiveDate::from_ymd_opt(2026, 4, 15).unwrap();
+
+        add_task(&conn, "Has due", None, Some(target), t, false).unwrap();
+        add_task(&conn, "No due", None, None, t, false).unwrap();
+
+        // due = None means no due filter: all open tasks returned (backward compat).
+        let tasks = list_tasks(
+            &conn,
+            false,
+            None,
+            None,
+            &[SortKey::Id],
+            SortOrder::Asc,
+            false,
+        )
+        .unwrap();
+        assert_eq!(tasks.len(), 2);
+    }
+
+    #[test]
+    fn test_list_tasks_due_no_match() {
+        let conn = open_in_memory().unwrap();
+        let t = now();
+        let target = NaiveDate::from_ymd_opt(2026, 4, 15).unwrap();
+        let missing = NaiveDate::from_ymd_opt(2026, 12, 31).unwrap();
+
+        add_task(&conn, "Has due", None, Some(target), t, false).unwrap();
+
+        let tasks = list_tasks(
+            &conn,
+            false,
+            None,
+            Some(missing),
+            &[SortKey::Id],
+            SortOrder::Asc,
+            false,
+        )
+        .unwrap();
+        assert!(tasks.is_empty());
     }
 
     #[test]

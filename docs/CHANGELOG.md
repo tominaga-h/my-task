@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.8.0] - 2026-06-21
+
+### Added
+
+- `list --due <DATE>` / `-d`: due 日でタスクを絞り込むフィルタを追加。`today`・`明日`・曜日名などのファジー入力や `YYYY-MM-DD` 形式に対応し、`--project` / `--all` などと併用可能 (#112)
+
 ## [1.7.0] - 2026-06-21
 
 ### Changed

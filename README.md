@@ -106,6 +106,7 @@ my-task list                 # Open tasks only
 my-task ls                   # Alias
 my-task list --all           # Include done/closed tasks
 my-task list -P my-app       # Filter by project
+my-task list --due today     # Filter by due date (only tasks due today)
 my-task list --sort due      # Sort by: id, due, project, created
 my-task list --sort project --sort due  # Multiple sort keys
 my-task list --important-only    # Important tasks only
@@ -274,6 +275,7 @@ List tasks in a table. Alias: `my-task ls`
 |--------|-------|---------|-------------|
 | `--all` | `-a` | `false` | Show all tasks including done and closed |
 | `--project <NAME>` | `-P` | — | Filter by project name |
+| `--due <DATE>` | `-d` | — | Filter by due date (`YYYY-MM-DD` or fuzzy input like `today`, `今日`, `明日`) |
 | `--sort <KEY>` | `-s` | `id` | Sort by: `id`, `due`, `project`, `created` (`age` is alias for `created`). Repeatable for multi-key sort |
 | `--important-only` | — | `false` | Show only important tasks |
 | `--follow` | `-f` | `false` | Full-screen, auto-refreshing view. Press `q`/`Esc`/`Ctrl-C` to quit, `r` to refresh now, `j`/`k` (or `↓`/`↑`) to scroll. Requires a TTY (prints once when piped) |

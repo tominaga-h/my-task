@@ -559,6 +559,196 @@ fn test_follow_non_tty_falls_back_to_single_render() {
 }
 
 #[test]
+fn test_list_filter_due_exact_date() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["add", "Due on target", "--due", "2026-04-15"])
+        .assert()
+        .success();
+    cmd(&db_path)
+        .args(["add", "Due elsewhere", "--due", "2026-04-16"])
+        .assert()
+        .success();
+
+    let output = cmd(&db_path)
+        .args(["list", "--due", "2026-04-15"])
+        .assert()
+        .success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+    assert!(stdout.contains("Due on target"));
+    assert!(!stdout.contains("Due elsewhere"));
+    assert!(stdout.contains("1 tasks"));
+}
+
+#[test]
+fn test_list_filter_due_relative_today() {
+    // `add --due today` and `list --due today` resolve the same relative value
+    // through the same date_parser, so they stay consistent regardless of the
+    // actual run date. This makes the end-to-end test deterministic.
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["add", "Due today task", "--due", "today"])
+        .assert()
+        .success();
+    // Contrast task with no due date: must be excluded by the today filter.
+    cmd(&db_path)
+        .args(["add", "No due task"])
+        .assert()
+        .success();
+
+    let output = cmd(&db_path)
+        .args(["list", "--due", "today"])
+        .assert()
+        .success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+    assert!(stdout.contains("Due today task"));
+    assert!(!stdout.contains("No due task"));
+    assert!(stdout.contains("1 tasks"));
+}
+
+#[test]
+fn test_list_filter_due_short_flag() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["add", "Due on target", "--due", "2026-04-15"])
+        .assert()
+        .success();
+    cmd(&db_path)
+        .args(["add", "Due elsewhere", "--due", "2026-04-16"])
+        .assert()
+        .success();
+
+    // -d should behave the same as --due.
+    let output = cmd(&db_path)
+        .args(["list", "-d", "2026-04-15"])
+        .assert()
+        .success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+    assert!(stdout.contains("Due on target"));
+    assert!(!stdout.contains("Due elsewhere"));
+    assert!(stdout.contains("1 tasks"));
+}
+
+#[test]
+fn test_list_filter_due_with_project() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args([
+            "add",
+            "Alpha due",
+            "--project",
+            "alpha",
+            "--due",
+            "2026-04-15",
+        ])
+        .assert()
+        .success();
+    cmd(&db_path)
+        .args([
+            "add",
+            "Beta due",
+            "--project",
+            "beta",
+            "--due",
+            "2026-04-15",
+        ])
+        .assert()
+        .success();
+
+    // --due AND --project: only the alpha task with the matching due date.
+    let output = cmd(&db_path)
+        .args(["list", "--due", "2026-04-15", "--project", "alpha"])
+        .assert()
+        .success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+    assert!(stdout.contains("Alpha due"));
+    assert!(!stdout.contains("Beta due"));
+    assert!(stdout.contains("1 tasks"));
+}
+
+#[test]
+fn test_list_filter_due_with_all() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["add", "Done due task", "--due", "2026-04-15"])
+        .assert()
+        .success();
+    cmd(&db_path).args(["done", "1"]).assert().success();
+
+    // Without --all, the done task is hidden even though due matches.
+    let output = cmd(&db_path)
+        .args(["list", "--due", "2026-04-15"])
+        .assert()
+        .success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+    assert!(!stdout.contains("Done due task"));
+
+    // With --all, the done task with a matching due date is shown.
+    let output = cmd(&db_path)
+        .args(["list", "--due", "2026-04-15", "--all"])
+        .assert()
+        .success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+    assert!(stdout.contains("Done due task"));
+    assert!(stdout.contains("DONE"));
+}
+
+#[test]
+fn test_list_filter_due_no_match() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["add", "Some task", "--due", "2026-04-15"])
+        .assert()
+        .success();
+
+    cmd(&db_path)
+        .args(["list", "--due", "2026-12-31"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "No tasks. Add one with: my-task add \"task title\"",
+        ));
+}
+
+#[test]
+fn test_list_filter_due_invalid() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path).args(["add", "Task"]).assert().success();
+
+    cmd(&db_path)
+        .args(["list", "--due", "not-a-date"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("invalid due date"));
+}
+
+#[test]
+fn test_list_help_shows_due() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["list", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--due"));
+}
+
+#[test]
 fn test_follow_non_tty_empty_db() {
     // Non-TTY fallback with no tasks should print the empty message and exit 0.
     let tmp = TempDir::new().unwrap();
