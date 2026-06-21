@@ -1,6 +1,6 @@
 # my-task
 
-![version](https://img.shields.io/badge/version-1.3.0-blue)
+![version](https://img.shields.io/badge/version-1.6.1-blue)
 
 SQLiteベースのシンプルなCLIタスクマネージャー。
 
@@ -84,6 +84,9 @@ my-task done 1
 ```bash
 my-task edit 5 --title "新しいタイトル"
 my-task edit 5 --project new-proj --due 金曜
+my-task edit 5 --remind 2026-04-10        # リマインドを追加
+my-task edit 5 --remove-remind 2026-04-10 # 特定の日付のリマインドを削除
+my-task edit 5 --no-remind                # すべてのリマインドを削除
 ```
 
 #### インタラクティブモード（エディター）
@@ -105,7 +108,11 @@ my-task list --all           # 完了・クローズ済みも表示
 my-task list -P my-app       # プロジェクトで絞り込み
 my-task list --sort due      # ソート: id, due, project, created
 my-task list --important-only  # 重要タスクのみ
+my-task list -f              # フォロー: 全画面で自動更新表示（q で終了）
+my-task list -f --interval 5 # 5秒ごとに更新
 ```
+
+フォローモードでは一覧が全画面表示され自動的に更新されます。`q`（または `Esc` / `Ctrl-C`）で終了、`r` で即時更新します。一覧が端末の高さより長い場合は、`j` / `↓`（下）と `k` / `↑`（上）でスクロールでき、画面下部の `[start-end/total]` インジケータが現在の表示範囲を示します。スクロール位置は自動更新をまたいで維持されます。フォローモードは TTY が必要で、パイプ／リダイレクト時は一覧を1回出力して終了します。
 
 ![DEMO](../images/demo-list.png)
 
@@ -214,19 +221,23 @@ MIT
 
 #### フラグモード
 
-`<ID>` と、`--title`・`--project`・`--due`・`--important`・`--no-important` のいずれか1つ以上が必須。
+`<ID>` と、`--title`・`--project`・`--due`・`--remind`・`--no-remind`・`--remove-remind`・`--important`・`--no-important` のいずれか1つ以上が必須。
 
 | オプション | 短縮 | 説明 |
 |-----------|------|------|
 | `--title <TEXT>` | `-t` | 新しいタイトルを設定（空文字不可） |
 | `--project <NAME>` | `-p` | 新しいプロジェクト名を設定 |
 | `--due <DATE>` | `-d` | 新しい期限を設定（YYYY-MM-DD またはざっくり入力） |
+| `--remind <DATE>` | `-r` | リマインド日付を追加（YYYY-MM-DD またはざっくり入力） |
+| `--no-remind` | — | すべてのリマインドを削除 |
+| `--remove-remind <DATE>` | — | 指定した日付のリマインドを1件削除（YYYY-MM-DD またはざっくり入力） |
 | `--important` | — | 重要フラグを設定 |
 | `--no-important` | — | 重要フラグを解除 |
 
+- `--remind`・`--no-remind`・`--remove-remind` は併用不可。
 - `--important` と `--no-important` は併用不可。
 - 出力: `Updated: #<ID> <TITLE>`
-- フラグ未指定、タスク未検出、タイトル空の場合、終了コード `1`。
+- フラグ未指定、タスク未検出、タイトル空、不正な日付、または `--remove-remind` が一致するリマインドのない日付を指定した場合、終了コード `1`。
 
 #### インタラクティブモード（`-i` / `--interactive`）
 
@@ -241,7 +252,7 @@ MIT
 - エディターでタスクブロックを削除すると、そのタスクが **クローズ** される（ステータスが `closed` に変更）。
 - 変更のあったタスクのみ更新。変更なしのタスクはスキップ。
 - 出力: `Updated N tasks`、`Closed N tasks`、または `No changes`
-- `-i` は `--title`・`--project`・`--due`・`--important`・`--no-important` と併用不可。
+- `-i` は `--title`・`--project`・`--due`・`--remind`・`--no-remind`・`--remove-remind`・`--important`・`--no-important` と併用不可。
 
 ### `my-task notify [OPTIONS]`
 
@@ -264,6 +275,8 @@ MIT
 | `--project <NAME>` | `-P` | — | プロジェクトでフィルタ |
 | `--sort <KEY>` | `-s` | `id` | ソート: `id`, `due`, `project`, `created`（`age` は `created` のエイリアス） |
 | `--important-only` | — | `false` | 重要タスクのみ表示 |
+| `--follow` | `-f` | `false` | 全画面で自動更新表示。`q`/`Esc`/`Ctrl-C` で終了、`r` で即時更新、`j`/`k`（または `↓`/`↑`）でスクロール。TTY が必要（パイプ時は1回出力） |
+| `--interval <SECS>` | — | `2` | フォローモードのポーリング間隔（秒） |
 
 **表示ルール:**
 - 重要タスク: タイトルがマゼンタ太字。
