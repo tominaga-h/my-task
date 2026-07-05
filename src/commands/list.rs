@@ -5,6 +5,7 @@ use comfy_table::presets::UTF8_FULL;
 use comfy_table::{Attribute, Cell, CellAlignment, Color, ContentArrangement, Table};
 use terminal_size::{terminal_size, Width};
 
+use crate::commands::json_output::{print_json, TaskJson};
 use crate::config;
 use crate::date_parser;
 use crate::db;
@@ -53,6 +54,10 @@ pub struct ListArgs {
     /// Polling interval in seconds for follow mode
     #[arg(long, default_value_t = 2, value_name = "SECS")]
     pub interval: u64,
+
+    /// Output as JSON (cannot be combined with --follow)
+    #[arg(long, conflicts_with = "follow")]
+    pub json: bool,
 }
 
 /// Resolved query parameters extracted from `ListArgs`.
@@ -146,6 +151,18 @@ pub fn run(args: ListArgs) {
             std::process::exit(1);
         }
     };
+
+    if args.json {
+        // Fill reminds for each task, matching print_task_table's logic, then
+        // emit a JSON array (empty renders as `[]`, no "No tasks" message).
+        let mut tasks = tasks;
+        for task in &mut tasks {
+            task.reminds = db::get_reminds_for_task(&conn, task.id).unwrap_or_default();
+        }
+        let json: Vec<TaskJson> = tasks.iter().map(TaskJson::from).collect();
+        print_json(&json);
+        return;
+    }
 
     if tasks.is_empty() {
         println!("No tasks. Add one with: my-task add \"task title\"");

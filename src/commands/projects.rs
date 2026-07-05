@@ -4,13 +4,18 @@ use comfy_table::presets::UTF8_FULL;
 use comfy_table::{Attribute, Cell, CellAlignment, Color, ContentArrangement, Table};
 use terminal_size::{terminal_size, Width};
 
+use crate::commands::json_output::{print_json, ProjectJson};
 use crate::config;
 use crate::db;
 
 #[derive(Args)]
-pub struct ProjectsArgs {}
+pub struct ProjectsArgs {
+    /// Output as JSON
+    #[arg(long)]
+    pub json: bool,
+}
 
-pub fn run(_args: ProjectsArgs) {
+pub fn run(args: ProjectsArgs) {
     let db_path = config::db_path();
     let conn = match db::open(&db_path) {
         Ok(c) => c,
@@ -27,6 +32,12 @@ pub fn run(_args: ProjectsArgs) {
             std::process::exit(1);
         }
     };
+
+    if args.json {
+        let json: Vec<ProjectJson> = projects.iter().map(ProjectJson::from).collect();
+        print_json(&json);
+        return;
+    }
 
     if projects.is_empty() {
         println!("No projects.");

@@ -1,6 +1,6 @@
 # my-task
 
-![version](https://img.shields.io/badge/version-1.9.1-blue)
+![version](https://img.shields.io/badge/version-1.10.0-blue)
 
 A simple CLI task manager powered by SQLite.
 
@@ -113,6 +113,7 @@ my-task list --sort project --sort due  # Multiple sort keys
 my-task list --important-only    # Important tasks only
 my-task list -f                  # Follow: full-screen, auto-refreshing view (q to quit)
 my-task list -f --interval 5     # Refresh every 5 seconds
+my-task list --json              # Machine-readable JSON output
 ```
 
 In follow mode the list is shown full-screen and refreshes automatically. Press `q` (or `Esc` / `Ctrl-C`) to quit, or `r` to refresh immediately. When the list is taller than the terminal, scroll with `j` / `↓` (down) and `k` / `↑` (up); a `[start-end/total]` indicator at the bottom shows the current range. The scroll position is kept across auto-refreshes. Follow mode requires a TTY; when output is piped/redirected it prints the list once and exits.
@@ -143,6 +144,7 @@ Silent (no output) when there are no matching tasks.
 my-task search "bug"             # Search open tasks by keyword
 my-task search "bug" --all       # Include done/closed tasks
 my-task search "bug" -p my-app   # Combine with project filter
+my-task search "bug" --json      # Machine-readable JSON output
 ```
 
 ### Show task details
@@ -175,6 +177,7 @@ my-task project my-app --set-category work    # Assign the "work" category
 my-task project my-app --clear-category       # Remove the category
 my-task list --category work                  # List tasks in "work" projects
 my-task projects                              # Category column is shown here
+my-task projects --json                       # Machine-readable JSON output
 ```
 
 The project must already exist (create it by adding a task with `-p`). Setting a
@@ -300,6 +303,7 @@ List tasks in a table. Alias: `my-task ls`
 | `--important-only` | — | `false` | Show only important tasks |
 | `--follow` | `-f` | `false` | Full-screen, auto-refreshing view. Press `q`/`Esc`/`Ctrl-C` to quit, `r` to refresh now, `j`/`k` (or `↓`/`↑`) to scroll. Requires a TTY (prints once when piped) |
 | `--interval <SECS>` | — | `2` | Polling interval (seconds) for follow mode |
+| `--json` | — | `false` | Output as JSON array (cannot be combined with `--follow`) |
 
 **Display rules:**
 - Important tasks: title in magenta bold.
@@ -319,9 +323,11 @@ Search tasks by title (partial match, case-insensitive for ASCII).
 |--------|-------|---------|-------------|
 | `--all` | `-a` | `false` | Include done and closed tasks |
 | `--project <NAME>` | `-p` | — | Filter by project name |
+| `--json` | — | `false` | Output as JSON array |
 
 - Results are displayed in the same table format as `list`.
 - Outputs `No tasks found for keyword: "..."` when no tasks match.
+- With `--json`, matching tasks are output as a JSON array (`[]` when none match).
 
 ### `my-task show <ID> [OPTIONS]`
 
@@ -333,6 +339,7 @@ Show detailed information about a single task.
 
 - Default output: key-value format (one field per line).
 - Fields: ID, Title, Status, Project, Due, Remind, Important, Created, Updated.
+- `--json` output uses the same schema as `list` / `search` (single object): `id`, `title`, `status`, `project`, `due`, `created`, `done_at`, `updated`, `reminds`, `important`, `source`.
 - Exit code `1` if the task is not found.
 
 ### `my-task project <NAME> [OPTIONS]`
@@ -350,3 +357,7 @@ Manage a single project's category. The project must already exist.
 ### `my-task projects`
 
 List all projects with their category and task counts (Open / Done / Closed / Total).
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--json` | — | `false` | Output as JSON array (`[]` when there are no projects) |
