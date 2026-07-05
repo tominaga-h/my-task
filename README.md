@@ -180,6 +180,9 @@ my-task projects                              # Category column is shown here
 The project must already exist (create it by adding a task with `-p`). Setting a
 category on an unknown project exits with code `1`.
 
+`--category` and `--project` are mutually exclusive on `list`; combining them is
+rejected as an argument error.
+
 ## Data storage
 
 Task data is stored in a SQLite database at:
@@ -291,7 +294,7 @@ List tasks in a table. Alias: `my-task ls`
 |--------|-------|---------|-------------|
 | `--all` | `-a` | `false` | Show all tasks including done and closed |
 | `--project <NAME>` | `-P` | — | Filter by project name |
-| `--category <CAT>` | `-c` | — | Filter by project category (can be combined with `--project`) |
+| `--category <CAT>` | `-c` | — | Filter by project category (cannot be combined with `--project`) |
 | `--due <DATE>` | `-d` | — | Filter by due date (`YYYY-MM-DD` or fuzzy input like `today`, `今日`, `明日`) |
 | `--sort <KEY>` | `-s` | `id` | Sort by: `id`, `due`, `project`, `created` (`age` is alias for `created`). Repeatable for multi-key sort |
 | `--important-only` | — | `false` | Show only important tasks |

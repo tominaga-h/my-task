@@ -22,8 +22,8 @@ pub struct ListArgs {
     #[arg(short, long)]
     pub project: Option<String>,
 
-    /// Filter by project category
-    #[arg(short = 'c', long)]
+    /// Filter by project category (cannot be combined with --project)
+    #[arg(short = 'c', long, conflicts_with = "project")]
     pub category: Option<String>,
 
     /// Filter by due date (YYYY-MM-DD, 今日, 明日, 来週, 月曜〜日曜, etc.)
