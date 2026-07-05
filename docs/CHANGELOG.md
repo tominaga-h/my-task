@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.9.0] - 2026-07-05
+
+### Added
+
+- `project` コマンドを追加: `my-task project <PROJECT> --set-category <CATEGORY>` で project にカテゴリを設定、`--clear-category` で解除 (#320)
+- `list --category <CATEGORY>` / `-c`: カテゴリ単位でタスクを絞り込むフィルタを追加。`--project` との併用は AND 条件で動作 (#320)
+- `projects` 一覧に Category カラムを追加 (#320)
+
 ## [1.8.0] - 2026-06-21
 
 ### Added
