@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.10.0] - 2026-07-05
+
+### Added
+
+- `list`(`ls`) / `search` / `projects` に `--json` オプションを追加。機械可読な JSON を標準出力に出力する（結果が空でも `[]` を返す） (#349)
+
+### Changed
+
+- `show --json` の出力スキーマを `list` / `search` と統一。リマインダのキー名を `remind` から `reminds`（複数形）に変更し、`done_at` / `source` フィールドを追加、pretty 整形に変更 (#349)
+
 ## [1.9.1] - 2026-07-05
 
 ### Changed

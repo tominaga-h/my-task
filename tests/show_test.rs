@@ -195,13 +195,15 @@ fn test_show_json() {
         .output()
         .unwrap();
     let stdout = String::from_utf8(output.stdout).unwrap();
-    assert!(stdout.contains("\"id\":1"));
-    assert!(stdout.contains("\"title\":\"JSON task\""));
-    assert!(stdout.contains("\"status\":\"open\""));
-    assert!(stdout.contains("\"project\":\"myproj\""));
-    assert!(stdout.contains("\"due\":\"2026-05-01\""));
-    assert!(stdout.contains("\"important\":true"));
-    assert!(stdout.contains("\"remind\":[]"));
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("valid JSON");
+    assert_eq!(v["id"], 1);
+    assert_eq!(v["title"], "JSON task");
+    assert_eq!(v["status"], "open");
+    assert_eq!(v["project"], "myproj");
+    assert_eq!(v["due"], "2026-05-01");
+    assert_eq!(v["important"], true);
+    // Schema unified with list/search: `reminds` (plural), empty array here.
+    assert_eq!(v["reminds"], serde_json::json!([]));
 }
 
 #[test]
@@ -216,9 +218,13 @@ fn test_show_json_null_fields() {
         .output()
         .unwrap();
     let stdout = String::from_utf8(output.stdout).unwrap();
-    assert!(stdout.contains("\"project\":null"));
-    assert!(stdout.contains("\"due\":null"));
-    assert!(stdout.contains("\"important\":false"));
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("valid JSON");
+    assert_eq!(v["project"], serde_json::Value::Null);
+    assert_eq!(v["due"], serde_json::Value::Null);
+    assert_eq!(v["done_at"], serde_json::Value::Null);
+    assert_eq!(v["important"], false);
+    // Unified schema exposes `source` (defaults to "private" for added tasks).
+    assert_eq!(v["source"], "private");
 }
 
 #[test]
@@ -287,16 +293,13 @@ fn test_show_json_created_updated_have_time_due_does_not() {
         .output()
         .unwrap();
     let stdout = String::from_utf8(output.stdout).unwrap();
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("valid JSON");
 
     // created / updated carry a HH:MM:SS time component inside the JSON string.
     for key in ["created", "updated"] {
-        let needle = format!("\"{key}\":\"");
-        let start = stdout
-            .find(&needle)
-            .unwrap_or_else(|| panic!("{key} present: {stdout}"))
-            + needle.len();
-        let rest = &stdout[start..];
-        let value = &rest[..rest.find('"').expect("closing quote")];
+        let value = v[key]
+            .as_str()
+            .unwrap_or_else(|| panic!("{key} present as string: {stdout}"));
         let (date_part, time_part) = value
             .split_once(' ')
             .unwrap_or_else(|| panic!("{key} JSON value lacks a time component: {value}"));
@@ -308,6 +311,5 @@ fn test_show_json_created_updated_have_time_due_does_not() {
     }
 
     // due stays date-only: no time component appended.
-    assert!(stdout.contains("\"due\":\"2026-05-01\""));
-    assert!(!stdout.contains("\"due\":\"2026-05-01 "));
+    assert_eq!(v["due"], "2026-05-01");
 }

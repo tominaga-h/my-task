@@ -3,6 +3,7 @@ pub mod close;
 pub mod done;
 pub mod edit;
 pub mod follow;
+pub mod json_output;
 pub mod list;
 pub mod notify;
 pub mod project;

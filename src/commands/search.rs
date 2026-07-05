@@ -1,5 +1,6 @@
 use clap::Args;
 
+use crate::commands::json_output::{print_json, TaskJson};
 use crate::commands::list;
 use crate::config;
 use crate::db;
@@ -16,6 +17,10 @@ pub struct SearchArgs {
     /// Filter by project name
     #[arg(short, long)]
     pub project: Option<String>,
+
+    /// Output as JSON
+    #[arg(long)]
+    pub json: bool,
 }
 
 pub fn run(args: SearchArgs) {
@@ -35,6 +40,17 @@ pub fn run(args: SearchArgs) {
             std::process::exit(1);
         }
     };
+
+    if args.json {
+        // Fill reminds for each task, then emit a JSON array (empty -> `[]`).
+        let mut tasks = tasks;
+        for task in &mut tasks {
+            task.reminds = db::get_reminds_for_task(&conn, task.id).unwrap_or_default();
+        }
+        let json: Vec<TaskJson> = tasks.iter().map(TaskJson::from).collect();
+        print_json(&json);
+        return;
+    }
 
     if tasks.is_empty() {
         println!("No tasks found for keyword: \"{}\"", args.keyword);

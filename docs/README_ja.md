@@ -112,6 +112,7 @@ my-task list --sort due      # ソート: id, due, project, created
 my-task list --important-only  # 重要タスクのみ
 my-task list -f              # フォロー: 全画面で自動更新表示（q で終了）
 my-task list -f --interval 5 # 5秒ごとに更新
+my-task list --json          # 機械可読な JSON 出力
 ```
 
 フォローモードでは一覧が全画面表示され自動的に更新されます。`q`（または `Esc` / `Ctrl-C`）で終了、`r` で即時更新します。一覧が端末の高さより長い場合は、`j` / `↓`（下）と `k` / `↑`（上）でスクロールでき、画面下部の `[start-end/total]` インジケータが現在の表示範囲を示します。スクロール位置は自動更新をまたいで維持されます。フォローモードは TTY が必要で、パイプ／リダイレクト時は一覧を1回出力して終了します。
@@ -142,6 +143,7 @@ my-task notify --days 3     # 3日以内に期限が来るタスクも表示
 my-task search "バグ"             # 未完了タスクをキーワード検索
 my-task search "バグ" --all       # 完了・クローズ済みも含む
 my-task search "バグ" -p my-app   # プロジェクトフィルタと併用
+my-task search "バグ" --json      # 機械可読な JSON 出力
 ```
 
 ### タスクの詳細表示
@@ -173,6 +175,7 @@ my-task project my-app --set-category work    # "work" カテゴリを設定
 my-task project my-app --clear-category       # カテゴリを解除
 my-task list --category work                  # "work" カテゴリのプロジェクトのタスクを一覧
 my-task projects                              # 一覧に Category カラムが表示される
+my-task projects --json                       # 機械可読な JSON 出力
 ```
 
 プロジェクトは事前に存在している必要があります（`-p` でタスクを追加すると作成されます）。存在しないプロジェクトにカテゴリを設定しようとすると exit code `1` で終了します。
@@ -296,6 +299,7 @@ MIT
 | `--important-only` | — | `false` | 重要タスクのみ表示 |
 | `--follow` | `-f` | `false` | 全画面で自動更新表示。`q`/`Esc`/`Ctrl-C` で終了、`r` で即時更新、`j`/`k`（または `↓`/`↑`）でスクロール。TTY が必要（パイプ時は1回出力） |
 | `--interval <SECS>` | — | `2` | フォローモードのポーリング間隔（秒） |
+| `--json` | — | `false` | JSON 配列で出力（`--follow` とは併用不可） |
 
 **表示ルール:**
 - 重要タスク: タイトルがマゼンタ太字。
@@ -315,9 +319,11 @@ MIT
 |-----------|------|----------|------|
 | `--all` | `-a` | `false` | 完了・クローズ済みも含める |
 | `--project <NAME>` | `-p` | — | プロジェクトでフィルタ |
+| `--json` | — | `false` | JSON 配列で出力 |
 
 - 結果は `list` コマンドと同じテーブル形式で表示。
 - マッチなしの場合は `No tasks found for keyword: "..."` を出力。
+- `--json` 指定時はマッチしたタスクを JSON 配列で出力（マッチなしは `[]`）。
 
 ### `my-task show <ID> [OPTIONS]`
 
@@ -329,6 +335,7 @@ MIT
 
 - デフォルト: key: value 形式（1行1フィールド）。
 - フィールド: ID, Title, Status, Project, Due, Remind, Important, Created, Updated
+- `--json` 出力は `list` / `search` と同一スキーマ（単一オブジェクト）: `id`, `title`, `status`, `project`, `due`, `created`, `done_at`, `updated`, `reminds`, `important`, `source`。
 - タスクが見つからない場合、終了コード `1`。
 
 ### `my-task project <NAME> [OPTIONS]`
@@ -346,3 +353,7 @@ MIT
 ### `my-task projects`
 
 全プロジェクトを、カテゴリとタスク件数（Open / Done / Closed / Total）とともに一覧表示する。
+
+| オプション | 短縮 | デフォルト | 説明 |
+|-----------|------|----------|------|
+| `--json` | — | `false` | JSON 配列で出力（プロジェクトがなければ `[]`） |
