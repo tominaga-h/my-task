@@ -22,6 +22,10 @@ pub struct ListArgs {
     #[arg(short, long)]
     pub project: Option<String>,
 
+    /// Filter by project category
+    #[arg(short = 'c', long)]
+    pub category: Option<String>,
+
     /// Filter by due date (YYYY-MM-DD, 今日, 明日, 来週, 月曜〜日曜, etc.)
     #[arg(short, long)]
     pub due: Option<String>,
@@ -55,6 +59,7 @@ pub struct ListArgs {
 pub struct ListQuery {
     pub all: bool,
     pub project: Option<String>,
+    pub category: Option<String>,
     pub due: Option<NaiveDate>,
     pub sorts: Vec<SortKey>,
     pub order: SortOrder,
@@ -100,6 +105,7 @@ pub fn resolve_query(args: &ListArgs) -> ListQuery {
     ListQuery {
         all: args.all,
         project: args.project.clone(),
+        category: args.category.clone(),
         due,
         sorts,
         order,
@@ -128,6 +134,7 @@ pub fn run(args: ListArgs) {
         &conn,
         query.all,
         query.project.as_deref(),
+        query.category.as_deref(),
         query.due,
         &query.sorts,
         query.order,

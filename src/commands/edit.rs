@@ -243,6 +243,7 @@ fn run_interactive(id: Option<u32>, filter_project: Option<String>) {
             false,
             filter_project.as_deref(),
             None,
+            None,
             &[SortKey::Id],
             SortOrder::default(),
             false,

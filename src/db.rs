@@ -12,8 +12,9 @@ pub fn open(path: &Path) -> Result<Connection, rusqlite::Error> {
     conn.execute_batch("PRAGMA journal_mode=WAL;")?;
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS projects (
-            id    INTEGER PRIMARY KEY AUTOINCREMENT,
-            name  TEXT    NOT NULL UNIQUE
+            id       INTEGER PRIMARY KEY AUTOINCREMENT,
+            name     TEXT    NOT NULL UNIQUE,
+            category TEXT
         );",
     )?;
     conn.execute_batch(
@@ -38,8 +39,18 @@ pub fn open(path: &Path) -> Result<Connection, rusqlite::Error> {
         );",
     )?;
     migrate_tasks_schema(&conn)?;
+    migrate_projects_schema(&conn)?;
     normalize_datetime_columns(&conn)?;
     Ok(conn)
+}
+
+/// Idempotently add the `category` column to the `projects` table if it does not
+/// already exist. Running `open()` repeatedly is a no-op once the column exists.
+fn migrate_projects_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
+    if !table_has_column(conn, "projects", "category")? {
+        conn.execute_batch("ALTER TABLE projects ADD COLUMN category TEXT")?;
+    }
+    Ok(())
 }
 
 /// Normalize legacy date-only values in the datetime columns (`created`,
@@ -75,8 +86,9 @@ fn migrate_tasks_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
     let migration_result: Result<(), rusqlite::Error> = (|| {
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS projects (
-                id    INTEGER PRIMARY KEY AUTOINCREMENT,
-                name  TEXT    NOT NULL UNIQUE
+                id       INTEGER PRIMARY KEY AUTOINCREMENT,
+                name     TEXT    NOT NULL UNIQUE,
+                category TEXT
             );",
         )?;
         conn.execute_batch(
@@ -229,10 +241,12 @@ pub fn complete_task(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn list_tasks(
     conn: &Connection,
     all: bool,
     project: Option<&str>,
+    category: Option<&str>,
     due: Option<NaiveDate>,
     sorts: &[SortKey],
     order: SortOrder,
@@ -249,6 +263,11 @@ pub fn list_tasks(
     if let Some(p) = project {
         conditions.push(format!("p.name = ?{}", param_idx));
         values.push(Box::new(p.to_string()));
+        param_idx += 1;
+    }
+    if let Some(c) = category {
+        conditions.push(format!("p.category = ?{}", param_idx));
+        values.push(Box::new(c.to_string()));
         param_idx += 1;
     }
     if let Some(target) = due {
@@ -443,14 +462,38 @@ pub fn search_tasks(
 
 pub struct ProjectSummary {
     pub name: String,
+    pub category: Option<String>,
     pub open_count: u32,
     pub done_count: u32,
     pub closed_count: u32,
 }
 
+/// Set (or clear) the category of an existing project by name.
+///
+/// A `category` of `None` (or a value that is empty after trimming) clears the
+/// category (sets it to NULL). The project is never created implicitly: if no
+/// project with `project` exists, this returns `Ok(false)` and makes no change.
+/// On success it returns `Ok(true)`.
+pub fn set_project_category(
+    conn: &Connection,
+    project: &str,
+    category: Option<&str>,
+) -> Result<bool, rusqlite::Error> {
+    let normalized: Option<String> = category
+        .map(str::trim)
+        .filter(|c| !c.is_empty())
+        .map(|c| c.to_string());
+    let affected = conn.execute(
+        "UPDATE projects SET category = ?1 WHERE name = ?2",
+        params![normalized, project],
+    )?;
+    Ok(affected > 0)
+}
+
 pub fn list_projects(conn: &Connection) -> Result<Vec<ProjectSummary>, rusqlite::Error> {
     let mut stmt = conn.prepare(
         "SELECT p.name,
+                p.category,
                 SUM(CASE WHEN t.status = 'open' THEN 1 ELSE 0 END) AS open_count,
                 SUM(CASE WHEN t.status = 'done' THEN 1 ELSE 0 END) AS done_count,
                 SUM(CASE WHEN t.status = 'closed' THEN 1 ELSE 0 END) AS closed_count
@@ -463,9 +506,10 @@ pub fn list_projects(conn: &Connection) -> Result<Vec<ProjectSummary>, rusqlite:
         .query_map([], |row| {
             Ok(ProjectSummary {
                 name: row.get(0)?,
-                open_count: row.get(1)?,
-                done_count: row.get(2)?,
-                closed_count: row.get(3)?,
+                category: row.get(1)?,
+                open_count: row.get(2)?,
+                done_count: row.get(3)?,
+                closed_count: row.get(4)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -526,8 +570,9 @@ mod tests {
         let conn = Connection::open_in_memory()?;
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS projects (
-                id    INTEGER PRIMARY KEY AUTOINCREMENT,
-                name  TEXT    NOT NULL UNIQUE
+                id       INTEGER PRIMARY KEY AUTOINCREMENT,
+                name     TEXT    NOT NULL UNIQUE,
+                category TEXT
             );
             CREATE TABLE IF NOT EXISTS tasks (
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -623,6 +668,9 @@ mod tests {
             )
             .unwrap();
         assert_eq!(project_name, Some("legacy-project".to_string()));
+
+        // The projects table must gain the `category` column after migration.
+        assert!(table_has_column(&conn, "projects", "category").unwrap());
     }
 
     #[test]
@@ -935,6 +983,7 @@ mod tests {
             false,
             None,
             None,
+            None,
             &[SortKey::Id],
             SortOrder::Asc,
             true,
@@ -1033,6 +1082,7 @@ mod tests {
             false,
             None,
             None,
+            None,
             &[SortKey::Id],
             SortOrder::Asc,
             false,
@@ -1055,6 +1105,7 @@ mod tests {
         let tasks = list_tasks(
             &conn,
             false,
+            None,
             None,
             Some(target),
             &[SortKey::Id],
@@ -1084,6 +1135,7 @@ mod tests {
             &conn,
             false,
             Some("alpha"),
+            None,
             Some(target),
             &[SortKey::Id],
             SortOrder::Asc,
@@ -1111,6 +1163,7 @@ mod tests {
             &conn,
             false,
             None,
+            None,
             Some(target),
             &[SortKey::Id],
             SortOrder::Asc,
@@ -1124,6 +1177,7 @@ mod tests {
         let with_all = list_tasks(
             &conn,
             true,
+            None,
             None,
             Some(target),
             &[SortKey::Id],
@@ -1149,6 +1203,7 @@ mod tests {
             false,
             None,
             None,
+            None,
             &[SortKey::Id],
             SortOrder::Asc,
             false,
@@ -1169,6 +1224,7 @@ mod tests {
         let tasks = list_tasks(
             &conn,
             false,
+            None,
             None,
             Some(missing),
             &[SortKey::Id],
@@ -1196,11 +1252,15 @@ mod tests {
         let id3 = add_task(&conn, "Done", Some("alpha"), None, t, false).unwrap();
         complete_task(&conn, id3, t).unwrap();
         add_task(&conn, "Beta task", Some("beta"), None, t, false).unwrap();
+        set_project_category(&conn, "alpha", Some("work")).unwrap();
 
         let projects = list_projects(&conn).unwrap();
         assert_eq!(projects.len(), 2);
 
         assert_eq!(projects[0].name, "alpha");
+        // list_projects surfaces the category (None until set).
+        assert_eq!(projects[0].category, Some("work".to_string()));
+        assert_eq!(projects[1].category, None);
         assert_eq!(projects[0].open_count, 2);
         assert_eq!(projects[0].done_count, 1);
         assert_eq!(projects[0].closed_count, 0);
@@ -1220,6 +1280,252 @@ mod tests {
         let projects = list_projects(&conn).unwrap();
         assert_eq!(projects.len(), 1);
         assert_eq!(projects[0].name, "proj");
+    }
+
+    // ----- project category -----
+
+    #[test]
+    fn test_migrate_projects_schema_adds_category_column() {
+        let tmp = TempDir::new().unwrap();
+        let db_path = tmp.path().join("no_category.db");
+        // Create a projects table WITHOUT the category column, mimicking an
+        // older schema.
+        let conn = Connection::open(&db_path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE projects (
+                id   INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT    NOT NULL UNIQUE
+            );
+            INSERT INTO projects (name) VALUES ('legacy');",
+        )
+        .unwrap();
+        assert!(!table_has_column(&conn, "projects", "category").unwrap());
+        drop(conn);
+
+        // open() runs the migration and adds the category column.
+        let conn = open(&db_path).unwrap();
+        assert!(table_has_column(&conn, "projects", "category").unwrap());
+    }
+
+    #[test]
+    fn test_migrate_projects_schema_is_idempotent() {
+        let tmp = TempDir::new().unwrap();
+        let db_path = tmp.path().join("category.db");
+
+        // First open creates the schema (with category) and sets a value.
+        let conn = open(&db_path).unwrap();
+        conn.execute(
+            "INSERT INTO projects (name, category) VALUES ('job', 'work')",
+            [],
+        )
+        .unwrap();
+        drop(conn);
+
+        // Opening again must not error and must preserve the value.
+        let conn = open(&db_path).unwrap();
+        assert!(table_has_column(&conn, "projects", "category").unwrap());
+        let category: Option<String> = conn
+            .query_row(
+                "SELECT category FROM projects WHERE name = 'job'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(category, Some("work".to_string()));
+    }
+
+    #[test]
+    fn test_set_project_category_sets_and_lists() {
+        let conn = open_in_memory().unwrap();
+        add_task(&conn, "Task", Some("job"), None, now(), false).unwrap();
+
+        let ok = set_project_category(&conn, "job", Some("work")).unwrap();
+        assert!(ok);
+
+        let projects = list_projects(&conn).unwrap();
+        assert_eq!(projects.len(), 1);
+        assert_eq!(projects[0].name, "job");
+        assert_eq!(projects[0].category, Some("work".to_string()));
+    }
+
+    #[test]
+    fn test_set_project_category_clears_with_none() {
+        let conn = open_in_memory().unwrap();
+        add_task(&conn, "Task", Some("job"), None, now(), false).unwrap();
+        set_project_category(&conn, "job", Some("work")).unwrap();
+
+        // None clears the category (NULL).
+        let ok = set_project_category(&conn, "job", None).unwrap();
+        assert!(ok);
+
+        let projects = list_projects(&conn).unwrap();
+        assert_eq!(projects[0].category, None);
+    }
+
+    #[test]
+    fn test_set_project_category_clears_with_empty_string() {
+        let conn = open_in_memory().unwrap();
+        add_task(&conn, "Task", Some("job"), None, now(), false).unwrap();
+        set_project_category(&conn, "job", Some("work")).unwrap();
+
+        // A blank (whitespace-only) category also clears it.
+        let ok = set_project_category(&conn, "job", Some("   ")).unwrap();
+        assert!(ok);
+
+        let projects = list_projects(&conn).unwrap();
+        assert_eq!(projects[0].category, None);
+    }
+
+    #[test]
+    fn test_set_project_category_missing_project_returns_false() {
+        let conn = open_in_memory().unwrap();
+        // No project named "ghost" exists and none is created implicitly.
+        let ok = set_project_category(&conn, "ghost", Some("work")).unwrap();
+        assert!(!ok);
+
+        let projects = list_projects(&conn).unwrap();
+        assert!(projects.is_empty());
+    }
+
+    #[test]
+    fn test_list_tasks_filter_by_category() {
+        let conn = open_in_memory().unwrap();
+        let t = now();
+        add_task(&conn, "Job task", Some("job"), None, t, false).unwrap();
+        add_task(&conn, "Hobby task", Some("hobby"), None, t, false).unwrap();
+        set_project_category(&conn, "job", Some("work")).unwrap();
+        set_project_category(&conn, "hobby", Some("fun")).unwrap();
+
+        let tasks = list_tasks(
+            &conn,
+            false,
+            None,
+            Some("work"),
+            None,
+            &[SortKey::Id],
+            SortOrder::Asc,
+            false,
+        )
+        .unwrap();
+        assert_eq!(tasks.len(), 1);
+        assert_eq!(tasks[0].title, "Job task");
+    }
+
+    #[test]
+    fn test_list_tasks_category_and_project_and() {
+        let conn = open_in_memory().unwrap();
+        let t = now();
+        // Two projects share the same category.
+        add_task(&conn, "Alpha task", Some("alpha"), None, t, false).unwrap();
+        add_task(&conn, "Beta task", Some("beta"), None, t, false).unwrap();
+        set_project_category(&conn, "alpha", Some("work")).unwrap();
+        set_project_category(&conn, "beta", Some("work")).unwrap();
+
+        // category = work matches both, project = alpha narrows to one (AND).
+        let tasks = list_tasks(
+            &conn,
+            false,
+            Some("alpha"),
+            Some("work"),
+            None,
+            &[SortKey::Id],
+            SortOrder::Asc,
+            false,
+        )
+        .unwrap();
+        assert_eq!(tasks.len(), 1);
+        assert_eq!(tasks[0].title, "Alpha task");
+    }
+
+    #[test]
+    fn test_list_tasks_category_none_returns_all() {
+        let conn = open_in_memory().unwrap();
+        let t = now();
+        add_task(&conn, "Job task", Some("job"), None, t, false).unwrap();
+        add_task(&conn, "Plain task", None, None, t, false).unwrap();
+        set_project_category(&conn, "job", Some("work")).unwrap();
+
+        // category = None means no category filter (backward compat).
+        let tasks = list_tasks(
+            &conn,
+            false,
+            None,
+            None,
+            None,
+            &[SortKey::Id],
+            SortOrder::Asc,
+            false,
+        )
+        .unwrap();
+        assert_eq!(tasks.len(), 2);
+    }
+
+    #[test]
+    fn test_list_tasks_category_no_match() {
+        let conn = open_in_memory().unwrap();
+        let t = now();
+        add_task(&conn, "Job task", Some("job"), None, t, false).unwrap();
+        set_project_category(&conn, "job", Some("work")).unwrap();
+
+        let tasks = list_tasks(
+            &conn,
+            false,
+            None,
+            Some("nonexistent"),
+            None,
+            &[SortKey::Id],
+            SortOrder::Asc,
+            false,
+        )
+        .unwrap();
+        assert!(tasks.is_empty());
+    }
+
+    #[test]
+    fn test_list_tasks_category_and_due_and() {
+        let conn = open_in_memory().unwrap();
+        let t = now();
+        let target = NaiveDate::from_ymd_opt(2026, 4, 15).unwrap();
+        let other = NaiveDate::from_ymd_opt(2026, 4, 16).unwrap();
+
+        // Same category, different dues: only the matching-due task should pass.
+        add_task(
+            &conn,
+            "Work due target",
+            Some("job"),
+            Some(target),
+            t,
+            false,
+        )
+        .unwrap();
+        add_task(&conn, "Work due other", Some("job"), Some(other), t, false).unwrap();
+        // Matching due but a different category: must be excluded by the AND.
+        add_task(
+            &conn,
+            "Fun due target",
+            Some("hobby"),
+            Some(target),
+            t,
+            false,
+        )
+        .unwrap();
+        set_project_category(&conn, "job", Some("work")).unwrap();
+        set_project_category(&conn, "hobby", Some("fun")).unwrap();
+
+        // category = work AND due = target narrows to exactly one task.
+        let tasks = list_tasks(
+            &conn,
+            false,
+            None,
+            Some("work"),
+            Some(target),
+            &[SortKey::Id],
+            SortOrder::Asc,
+            false,
+        )
+        .unwrap();
+        assert_eq!(tasks.len(), 1);
+        assert_eq!(tasks[0].title, "Work due target");
     }
 
     // ----- parse_datetime -----
@@ -1256,8 +1562,9 @@ mod tests {
         let conn = Connection::open(&db_path).unwrap();
         conn.execute_batch(
             "CREATE TABLE projects (
-                id    INTEGER PRIMARY KEY AUTOINCREMENT,
-                name  TEXT    NOT NULL UNIQUE
+                id       INTEGER PRIMARY KEY AUTOINCREMENT,
+                name     TEXT    NOT NULL UNIQUE,
+                category TEXT
             );
             CREATE TABLE tasks (
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
