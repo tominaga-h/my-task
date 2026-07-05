@@ -1481,6 +1481,53 @@ mod tests {
         assert!(tasks.is_empty());
     }
 
+    #[test]
+    fn test_list_tasks_category_and_due_and() {
+        let conn = open_in_memory().unwrap();
+        let t = now();
+        let target = NaiveDate::from_ymd_opt(2026, 4, 15).unwrap();
+        let other = NaiveDate::from_ymd_opt(2026, 4, 16).unwrap();
+
+        // Same category, different dues: only the matching-due task should pass.
+        add_task(
+            &conn,
+            "Work due target",
+            Some("job"),
+            Some(target),
+            t,
+            false,
+        )
+        .unwrap();
+        add_task(&conn, "Work due other", Some("job"), Some(other), t, false).unwrap();
+        // Matching due but a different category: must be excluded by the AND.
+        add_task(
+            &conn,
+            "Fun due target",
+            Some("hobby"),
+            Some(target),
+            t,
+            false,
+        )
+        .unwrap();
+        set_project_category(&conn, "job", Some("work")).unwrap();
+        set_project_category(&conn, "hobby", Some("fun")).unwrap();
+
+        // category = work AND due = target narrows to exactly one task.
+        let tasks = list_tasks(
+            &conn,
+            false,
+            None,
+            Some("work"),
+            Some(target),
+            &[SortKey::Id],
+            SortOrder::Asc,
+            false,
+        )
+        .unwrap();
+        assert_eq!(tasks.len(), 1);
+        assert_eq!(tasks[0].title, "Work due target");
+    }
+
     // ----- parse_datetime -----
 
     #[test]
