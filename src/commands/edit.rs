@@ -158,7 +158,7 @@ fn run_flag(args: EditArgs) {
         })
     });
 
-    let today = Local::now().date_naive();
+    let now = Local::now().naive_local();
 
     let important = if args.important {
         Some(true)
@@ -176,7 +176,7 @@ fn run_flag(args: EditArgs) {
             args.title.as_deref(),
             args.project.as_deref(),
             due,
-            today,
+            now,
             important,
         )
         .is_err()
@@ -242,6 +242,8 @@ fn run_interactive(id: Option<u32>, filter_project: Option<String>) {
             &conn,
             false,
             filter_project.as_deref(),
+            None,
+            None,
             &[SortKey::Id],
             SortOrder::default(),
             false,
@@ -306,14 +308,14 @@ fn run_interactive(id: Option<u32>, filter_project: Option<String>) {
     let parsed = parse_yaml(&edited);
     let parsed_ids: std::collections::HashSet<u32> = parsed.iter().map(|e| e.id).collect();
 
-    let today = Local::now().date_naive();
+    let now = Local::now().naive_local();
     let mut updated_count = 0u32;
     let mut closed_count = 0u32;
 
     // Close tasks whose blocks were deleted
     for task in &tasks {
         if !parsed_ids.contains(&task.id) {
-            if db::close_task(&conn, task.id, today).is_err() {
+            if db::close_task(&conn, task.id, now).is_err() {
                 eprintln!("Error: failed to close task #{}", task.id);
                 std::process::exit(1);
             }
@@ -372,7 +374,7 @@ fn run_interactive(id: Option<u32>, filter_project: Option<String>) {
                 new_title,
                 new_project,
                 new_due,
-                today,
+                now,
                 new_important,
             )
             .is_err()
@@ -635,11 +637,17 @@ mod tests {
             title: "Test task".to_string(),
             status: crate::model::Status::Open,
             source: "private".to_string(),
-            created: NaiveDate::from_ymd_opt(2026, 3, 31).unwrap(),
+            created: NaiveDate::from_ymd_opt(2026, 3, 31)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap(),
             project: Some("my-proj".to_string()),
             due: Some(NaiveDate::from_ymd_opt(2026, 4, 10).unwrap()),
             done_at: None,
-            updated: NaiveDate::from_ymd_opt(2026, 3, 31).unwrap(),
+            updated: NaiveDate::from_ymd_opt(2026, 3, 31)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap(),
             reminds: vec![
                 NaiveDate::from_ymd_opt(2026, 4, 8).unwrap(),
                 NaiveDate::from_ymd_opt(2026, 4, 9).unwrap(),

@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.9.1] - 2026-07-05
+
+### Changed
+
+- `list` の `--project` と `--category` を排他に変更。併用するとエラー（引数エラー・exit code 2）で弾くようにした (#320)
+
+## [1.9.0] - 2026-07-05
+
+### Added
+
+- `project` コマンドを追加: `my-task project <PROJECT> --set-category <CATEGORY>` で project にカテゴリを設定、`--clear-category` で解除 (#320)
+- `list --category <CATEGORY>` / `-c`: カテゴリ単位でタスクを絞り込むフィルタを追加。`--project` との併用は AND 条件で動作 (#320)
+- `projects` 一覧に Category カラムを追加 (#320)
+
+## [1.8.0] - 2026-06-21
+
+### Added
+
+- `list --due <DATE>` / `-d`: due 日でタスクを絞り込むフィルタを追加。`today`・`明日`・曜日名などのファジー入力や `YYYY-MM-DD` 形式に対応し、`--project` / `--all` などと併用可能 (#112)
+
+## [1.7.0] - 2026-06-21
+
+### Changed
+
+- タスクの `created` / `updated` / `done_at` を日付（`YYYY-MM-DD`）から日時（`YYYY-MM-DD HH:MM:SS`）に変更。`show`（text / `--json`）の出力も日時表示になる (#306)
+- 既存DBは初回オープン時に日付のみの値を `YYYY-MM-DD 00:00:00` へ自動正規化（冪等）。`due` とリマインド日付は従来どおり日付のまま (#306)
+
 ## [1.6.1] - 2026-06-21
 
 ### Added

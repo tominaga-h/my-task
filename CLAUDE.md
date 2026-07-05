@@ -38,6 +38,23 @@ tests/
 
 コマンド追加時は: `commands/` にモジュール追加 → `commands/mod.rs` に pub mod → `main.rs` の `Commands` enum と `match` に追加。
 
+## ドキュメント配置
+
+ドキュメント類は `docs/` 配下に置く（リポジトリルート直下ではない）。新規作成せず、必ず既存ファイルを編集すること。
+
+```
+docs/
+  CHANGELOG.md   — 変更履歴（Keep a Changelog 系。新バージョンほど先頭に追記）
+  OVERVIEW.md    — プロジェクト概要
+  README_ja.md   — 日本語版 README
+  release/       — バージョンごとのリリースノート（vX.Y.Z.md）
+```
+
+- **CHANGELOG は `docs/CHANGELOG.md`**。ルート直下に `CHANGELOG.md` を新規作成しないこと。
+  - 書式: バージョン見出し `## [X.Y.Z] - YYYY-MM-DD` の下に `### Added` / `### Changed` / `### Fixed` セクション、各行末に `(#タスク番号)`。
+  - 新しいバージョンのエントリは既存の最新エントリの直前（ファイル上部）に追記する。
+- ユーザー向け README はリポジトリルートの `README.md` と、日本語版 `docs/README_ja.md` の2系統がある。
+
 ## ブランチ運用
 
 - `main`: リリースブランチ

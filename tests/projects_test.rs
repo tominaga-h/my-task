@@ -88,3 +88,24 @@ fn test_projects_no_project_tasks_not_shown() {
         .success()
         .stdout(predicate::str::contains("No projects."));
 }
+
+#[test]
+fn test_projects_shows_category_column() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["add", "Task A", "-p", "job"])
+        .assert()
+        .success();
+    cmd(&db_path)
+        .args(["project", "job", "--set-category", "work"])
+        .assert()
+        .success();
+
+    cmd(&db_path)
+        .args(["projects"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Category").and(predicate::str::contains("work")));
+}

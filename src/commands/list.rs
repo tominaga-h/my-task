@@ -1,4 +1,4 @@
-use chrono::{Datelike, Local};
+use chrono::{Datelike, Local, NaiveDate};
 use clap::Args;
 use comfy_table::modifiers::UTF8_SOLID_INNER_BORDERS;
 use comfy_table::presets::UTF8_FULL;
@@ -6,6 +6,7 @@ use comfy_table::{Attribute, Cell, CellAlignment, Color, ContentArrangement, Tab
 use terminal_size::{terminal_size, Width};
 
 use crate::config;
+use crate::date_parser;
 use crate::db;
 use crate::model::{SortKey, SortOrder, Status, Task};
 
@@ -20,6 +21,14 @@ pub struct ListArgs {
     /// Filter by project name
     #[arg(short, long)]
     pub project: Option<String>,
+
+    /// Filter by project category (cannot be combined with --project)
+    #[arg(short = 'c', long, conflicts_with = "project")]
+    pub category: Option<String>,
+
+    /// Filter by due date (YYYY-MM-DD, 今日, 明日, 来週, 月曜〜日曜, etc.)
+    #[arg(short, long)]
+    pub due: Option<String>,
 
     /// Sort by: id, due, project, created (repeatable)
     #[arg(short, long, default_value = "id")]
@@ -50,6 +59,8 @@ pub struct ListArgs {
 pub struct ListQuery {
     pub all: bool,
     pub project: Option<String>,
+    pub category: Option<String>,
+    pub due: Option<NaiveDate>,
     pub sorts: Vec<SortKey>,
     pub order: SortOrder,
     pub important_only: bool,
@@ -81,9 +92,21 @@ pub fn resolve_query(args: &ListArgs) -> ListQuery {
         SortOrder::Asc
     };
 
+    let due = args.due.as_ref().map(|s| {
+        date_parser::parse_fuzzy_date(s).unwrap_or_else(|| {
+            eprintln!(
+                "Error: invalid due date '{}'. Use: YYYY-MM-DD, 今日, 明日, 来週, 曜日名 etc.",
+                s
+            );
+            std::process::exit(1);
+        })
+    });
+
     ListQuery {
         all: args.all,
         project: args.project.clone(),
+        category: args.category.clone(),
+        due,
         sorts,
         order,
         important_only: args.important_only,
@@ -111,6 +134,8 @@ pub fn run(args: ListArgs) {
         &conn,
         query.all,
         query.project.as_deref(),
+        query.category.as_deref(),
+        query.due,
         &query.sorts,
         query.order,
         query.important_only,
@@ -216,7 +241,7 @@ pub fn build_task_table_string(
         } else if is_closed {
             "closed".to_string()
         } else {
-            let days = (today - task.created).num_days();
+            let days = (today - task.created.date()).num_days();
             format!("{}d", days)
         };
 
@@ -316,7 +341,7 @@ pub fn build_task_table_string(
                 Cell::new(due_text)
             };
 
-            let days = (today - task.created).num_days();
+            let days = (today - task.created.date()).num_days();
             let age_cell = if days > 30 {
                 Cell::new(age_text).fg(Color::Red)
             } else if days > 7 {
@@ -445,11 +470,11 @@ mod tests {
             title: title.to_string(),
             status,
             source: "manual".to_string(),
-            created: day(2026, 6, 1),
+            created: day(2026, 6, 1).and_hms_opt(0, 0, 0).unwrap(),
             project: None,
             due: None,
             done_at: None,
-            updated: day(2026, 6, 1),
+            updated: day(2026, 6, 1).and_hms_opt(0, 0, 0).unwrap(),
             reminds: Vec::new(),
             important: false,
         }

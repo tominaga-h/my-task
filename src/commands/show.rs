@@ -71,8 +71,8 @@ pub fn run(args: ShowArgs) {
             due,
             remind_strs.join(","),
             task.important,
-            task.created,
-            task.updated,
+            task.created.format("%Y-%m-%d %H:%M:%S"),
+            task.updated.format("%Y-%m-%d %H:%M:%S"),
         );
     } else {
         println!("ID: {}", task.id);
@@ -92,7 +92,7 @@ pub fn run(args: ShowArgs) {
             println!("Remind: {}", remind_strs.join(", "));
         }
         println!("Important: {}", if task.important { "yes" } else { "no" });
-        println!("Created: {}", task.created);
-        println!("Updated: {}", task.updated);
+        println!("Created: {}", task.created.format("%Y-%m-%d %H:%M:%S"));
+        println!("Updated: {}", task.updated.format("%Y-%m-%d %H:%M:%S"));
     }
 }
