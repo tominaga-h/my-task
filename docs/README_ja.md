@@ -1,6 +1,6 @@
 # my-task
 
-![version](https://img.shields.io/badge/version-1.6.1-blue)
+![version](https://img.shields.io/badge/version-1.9.1-blue)
 
 SQLiteベースのシンプルなCLIタスクマネージャー。
 
@@ -106,6 +106,8 @@ my-task list                 # 未完了タスクのみ
 my-task ls                   # エイリアス
 my-task list --all           # 完了・クローズ済みも表示
 my-task list -P my-app       # プロジェクトで絞り込み
+my-task list --category work  # プロジェクトのカテゴリで絞り込み
+my-task list --due today     # due 日で絞り込み（本日期限のタスクのみ）
 my-task list --sort due      # ソート: id, due, project, created
 my-task list --important-only  # 重要タスクのみ
 my-task list -f              # フォロー: 全画面で自動更新表示（q で終了）
@@ -161,6 +163,21 @@ my-task list --important-only    # 重要タスクのみ表示
 ```
 
 重要タスクは list / notify の出力で **マゼンタ太字** で表示されます。
+
+### プロジェクトカテゴリ
+
+各プロジェクトには最大1つのカテゴリを設定できます。`project` コマンドでカテゴリを設定・解除し、`list --category` でカテゴリ単位に絞り込めます:
+
+```bash
+my-task project my-app --set-category work    # "work" カテゴリを設定
+my-task project my-app --clear-category       # カテゴリを解除
+my-task list --category work                  # "work" カテゴリのプロジェクトのタスクを一覧
+my-task projects                              # 一覧に Category カラムが表示される
+```
+
+プロジェクトは事前に存在している必要があります（`-p` でタスクを追加すると作成されます）。存在しないプロジェクトにカテゴリを設定しようとすると exit code `1` で終了します。
+
+`list` の `--category` と `--project` は排他で、併用すると引数エラーで弾かれます。
 
 ## データ保存先
 
@@ -273,6 +290,8 @@ MIT
 |-----------|------|----------|------|
 | `--all` | `-a` | `false` | 完了・クローズ済みも含めて表示 |
 | `--project <NAME>` | `-P` | — | プロジェクトでフィルタ |
+| `--category <CAT>` | `-c` | — | プロジェクトのカテゴリでフィルタ（`--project` と併用不可） |
+| `--due <DATE>` | `-d` | — | due 日でフィルタ（`YYYY-MM-DD` または `today`・`今日`・`明日` などのざっくり入力） |
 | `--sort <KEY>` | `-s` | `id` | ソート: `id`, `due`, `project`, `created`（`age` は `created` のエイリアス） |
 | `--important-only` | — | `false` | 重要タスクのみ表示 |
 | `--follow` | `-f` | `false` | 全画面で自動更新表示。`q`/`Esc`/`Ctrl-C` で終了、`r` で即時更新、`j`/`k`（または `↓`/`↑`）でスクロール。TTY が必要（パイプ時は1回出力） |
@@ -311,3 +330,19 @@ MIT
 - デフォルト: key: value 形式（1行1フィールド）。
 - フィールド: ID, Title, Status, Project, Due, Remind, Important, Created, Updated
 - タスクが見つからない場合、終了コード `1`。
+
+### `my-task project <NAME> [OPTIONS]`
+
+単一プロジェクトのカテゴリを管理する。プロジェクトは事前に存在している必要がある。
+
+| オプション | 短縮 | 説明 |
+|-----------|------|------|
+| `--set-category <CAT>` | — | プロジェクトのカテゴリを設定 |
+| `--clear-category` | — | プロジェクトのカテゴリを解除（`--set-category` と併用不可） |
+
+- `--set-category` と `--clear-category` のいずれか一方が必須。指定がない場合は終了コード `1`。
+- `<NAME>` のプロジェクトが存在しない場合は終了コード `1`（ここではプロジェクトは暗黙生成されない）。
+
+### `my-task projects`
+
+全プロジェクトを、カテゴリとタスク件数（Open / Done / Closed / Total）とともに一覧表示する。
