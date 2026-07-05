@@ -27,7 +27,7 @@ pre-push フックが `githooks/pre-push.sh` にあり、`make install-hooks` �
 ```
 src/
   main.rs        — CLIエントリポイント（clap derive でサブコマンド定義）
-  commands/      — 各サブコマンドの実装（add, close, done, edit, list, notify）
+  commands/      — 各サブコマンドの実装（add, close, done, edit, follow, list(ls), notify, project, projects, search, show）
   db.rs          — SQLite操作層（rusqlite, スキーマ定義・マイグレーション含む）
   model.rs       — Task構造体, Status/SortKey/SortOrder enum
   config.rs      — DBパス解決

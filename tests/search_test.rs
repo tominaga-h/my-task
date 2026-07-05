@@ -173,3 +173,54 @@ fn test_search_combined_all_and_project() {
     assert!(!stdout.contains("Open beta task"));
     assert!(stdout.contains("2 tasks"));
 }
+
+#[test]
+fn test_search_json_matching_only() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["add", "Buy groceries"])
+        .assert()
+        .success();
+    cmd(&db_path)
+        .args(["add", "Write report"])
+        .assert()
+        .success();
+    cmd(&db_path)
+        .args(["add", "Buy flowers"])
+        .assert()
+        .success();
+
+    let output = cmd(&db_path)
+        .args(["search", "Buy", "--json"])
+        .assert()
+        .success();
+    let value: serde_json::Value = serde_json::from_slice(&output.get_output().stdout).unwrap();
+    let arr = value.as_array().unwrap();
+    assert_eq!(arr.len(), 2);
+
+    let titles: Vec<&str> = arr.iter().map(|t| t["title"].as_str().unwrap()).collect();
+    assert!(titles.contains(&"Buy groceries"));
+    assert!(titles.contains(&"Buy flowers"));
+    assert!(!titles.contains(&"Write report"));
+}
+
+#[test]
+fn test_search_json_empty_is_bracket_pair() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path).args(["add", "Something"]).assert().success();
+
+    let output = cmd(&db_path)
+        .args(["search", "nomatch", "--json"])
+        .assert()
+        .success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+
+    let value: serde_json::Value = serde_json::from_slice(&output.get_output().stdout).unwrap();
+    assert!(value.as_array().unwrap().is_empty());
+    assert_eq!(stdout.trim(), "[]");
+    assert!(!stdout.contains("No tasks found"));
+}

@@ -828,3 +828,122 @@ fn test_list_category_conflicts_with_project() {
         .failure()
         .stderr(predicate::str::contains("cannot be used with"));
 }
+
+#[test]
+fn test_list_json_basic() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path).args(["add", "First task"]).assert().success();
+    cmd(&db_path)
+        .args(["add", "Second task"])
+        .assert()
+        .success();
+
+    let output = cmd(&db_path).args(["list", "--json"]).assert().success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+
+    let value: serde_json::Value = serde_json::from_slice(&output.get_output().stdout)
+        .unwrap_or_else(|e| panic!("output was not valid JSON: {e}\n{stdout}"));
+    let arr = value.as_array().expect("top-level JSON array");
+    assert_eq!(arr.len(), 2);
+
+    assert_eq!(arr[0]["id"], 1);
+    assert_eq!(arr[0]["title"], "First task");
+    assert_eq!(arr[0]["status"], "open");
+    assert_eq!(arr[1]["id"], 2);
+    assert_eq!(arr[1]["title"], "Second task");
+
+    // Table decorations must not appear in JSON mode.
+    assert!(!stdout.contains("tasks"));
+    assert!(!stdout.contains("OPEN"));
+}
+
+#[test]
+fn test_list_json_all_includes_done() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path).args(["add", "Open one"]).assert().success();
+    cmd(&db_path).args(["add", "Done one"]).assert().success();
+    cmd(&db_path).args(["done", "2"]).assert().success();
+
+    // Without --all, only the open task is returned.
+    let output = cmd(&db_path).args(["list", "--json"]).assert().success();
+    let value: serde_json::Value = serde_json::from_slice(&output.get_output().stdout).unwrap();
+    let arr = value.as_array().unwrap();
+    assert_eq!(arr.len(), 1);
+    assert_eq!(arr[0]["title"], "Open one");
+
+    // With --all, the done task appears with status "done".
+    let output = cmd(&db_path)
+        .args(["list", "--json", "--all"])
+        .assert()
+        .success();
+    let value: serde_json::Value = serde_json::from_slice(&output.get_output().stdout).unwrap();
+    let arr = value.as_array().unwrap();
+    assert_eq!(arr.len(), 2);
+    let done = arr.iter().find(|t| t["id"] == 2).unwrap();
+    assert_eq!(done["status"], "done");
+    assert!(done["done_at"].is_string());
+}
+
+#[test]
+fn test_list_json_due_and_remind_values() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args([
+            "add",
+            "Dated task",
+            "--due",
+            "2026-07-10",
+            "--remind",
+            "2026-07-08",
+        ])
+        .assert()
+        .success();
+
+    let output = cmd(&db_path).args(["list", "--json"]).assert().success();
+    let value: serde_json::Value = serde_json::from_slice(&output.get_output().stdout).unwrap();
+    let task = &value.as_array().unwrap()[0];
+
+    // due is "YYYY-MM-DD".
+    assert_eq!(task["due"], "2026-07-10");
+    // reminds is an array of "YYYY-MM-DD" strings.
+    let reminds = task["reminds"].as_array().unwrap();
+    assert_eq!(reminds.len(), 1);
+    assert_eq!(reminds[0], "2026-07-08");
+    // created is a datetime "YYYY-MM-DD HH:MM:SS".
+    let created = task["created"].as_str().unwrap();
+    assert_eq!(created.len(), 19);
+    assert!(created.contains(':'));
+}
+
+#[test]
+fn test_list_json_empty_is_bracket_pair() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    let output = cmd(&db_path).args(["list", "--json"]).assert().success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+
+    // No tasks -> JSON empty array, and NOT the "No tasks" message.
+    let value: serde_json::Value = serde_json::from_slice(&output.get_output().stdout).unwrap();
+    assert!(value.as_array().unwrap().is_empty());
+    assert_eq!(stdout.trim(), "[]");
+    assert!(!stdout.contains("No tasks"));
+}
+
+#[test]
+fn test_list_json_conflicts_with_follow() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["list", "--json", "--follow"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("cannot be used with"));
+}
