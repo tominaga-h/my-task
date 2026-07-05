@@ -106,6 +106,7 @@ my-task list                 # Open tasks only
 my-task ls                   # Alias
 my-task list --all           # Include done/closed tasks
 my-task list -P my-app       # Filter by project
+my-task list --category work # Filter by project category
 my-task list --due today     # Filter by due date (only tasks due today)
 my-task list --sort due      # Sort by: id, due, project, created
 my-task list --sort project --sort due  # Multiple sort keys
@@ -163,6 +164,21 @@ my-task list --important-only    # Filter important tasks only
 ```
 
 Important tasks are displayed in **magenta bold** in list and notify output.
+
+### Project categories
+
+Each project can have at most one category. Use the `project` command to set or
+clear a project's category, then filter tasks by category with `list --category`:
+
+```bash
+my-task project my-app --set-category work    # Assign the "work" category
+my-task project my-app --clear-category       # Remove the category
+my-task list --category work                  # List tasks in "work" projects
+my-task projects                              # Category column is shown here
+```
+
+The project must already exist (create it by adding a task with `-p`). Setting a
+category on an unknown project exits with code `1`.
 
 ## Data storage
 
@@ -275,6 +291,7 @@ List tasks in a table. Alias: `my-task ls`
 |--------|-------|---------|-------------|
 | `--all` | `-a` | `false` | Show all tasks including done and closed |
 | `--project <NAME>` | `-P` | — | Filter by project name |
+| `--category <CAT>` | `-c` | — | Filter by project category (can be combined with `--project`) |
 | `--due <DATE>` | `-d` | — | Filter by due date (`YYYY-MM-DD` or fuzzy input like `today`, `今日`, `明日`) |
 | `--sort <KEY>` | `-s` | `id` | Sort by: `id`, `due`, `project`, `created` (`age` is alias for `created`). Repeatable for multi-key sort |
 | `--important-only` | — | `false` | Show only important tasks |
@@ -314,3 +331,19 @@ Show detailed information about a single task.
 - Default output: key-value format (one field per line).
 - Fields: ID, Title, Status, Project, Due, Remind, Important, Created, Updated.
 - Exit code `1` if the task is not found.
+
+### `my-task project <NAME> [OPTIONS]`
+
+Manage a single project's category. The project must already exist.
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--set-category <CAT>` | — | Set the project's category |
+| `--clear-category` | — | Clear the project's category (mutually exclusive with `--set-category`) |
+
+- Exactly one of `--set-category` or `--clear-category` must be given; otherwise exits with code `1`.
+- Exit code `1` if no project named `<NAME>` exists (projects are never created implicitly here).
+
+### `my-task projects`
+
+List all projects with their category and task counts (Open / Done / Closed / Total).

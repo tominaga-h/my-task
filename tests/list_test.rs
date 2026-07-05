@@ -762,3 +762,55 @@ fn test_follow_non_tty_empty_db() {
             "No tasks. Add one with: my-task add \"task title\"",
         ));
 }
+
+#[test]
+fn test_list_filter_category() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["add", "Job task", "-p", "job"])
+        .assert()
+        .success();
+    cmd(&db_path)
+        .args(["add", "Hobby task", "-p", "hobby"])
+        .assert()
+        .success();
+    cmd(&db_path)
+        .args(["project", "job", "--set-category", "work"])
+        .assert()
+        .success();
+    cmd(&db_path)
+        .args(["project", "hobby", "--set-category", "fun"])
+        .assert()
+        .success();
+
+    let output = cmd(&db_path)
+        .args(["list", "--category", "work"])
+        .assert()
+        .success();
+    let stdout = String::from_utf8(output.get_output().stdout.clone()).unwrap();
+    assert!(stdout.contains("Job task"));
+    assert!(!stdout.contains("Hobby task"));
+}
+
+#[test]
+fn test_list_filter_category_no_match() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    cmd(&db_path)
+        .args(["add", "Job task", "-p", "job"])
+        .assert()
+        .success();
+    cmd(&db_path)
+        .args(["project", "job", "--set-category", "work"])
+        .assert()
+        .success();
+
+    cmd(&db_path)
+        .args(["list", "--category", "nonexistent"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("No tasks."));
+}

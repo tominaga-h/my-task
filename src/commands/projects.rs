@@ -44,6 +44,7 @@ pub fn run(_args: ProjectsArgs) {
 
     table.set_header(vec![
         Cell::new("Project").add_attribute(Attribute::Bold),
+        Cell::new("Category").add_attribute(Attribute::Bold),
         Cell::new("Open").add_attribute(Attribute::Bold),
         Cell::new("Done").add_attribute(Attribute::Bold),
         Cell::new("Closed").add_attribute(Attribute::Bold),
@@ -64,8 +65,11 @@ pub fn run(_args: ProjectsArgs) {
         };
         let closed_cell = Cell::new(p.closed_count).fg(Color::DarkGrey);
 
+        let category_text = p.category.as_deref().unwrap_or_default();
+
         table.add_row(vec![
             Cell::new(&p.name).fg(Color::Cyan),
+            Cell::new(category_text).fg(Color::Magenta),
             open_cell,
             done_cell,
             closed_cell,
@@ -73,7 +77,9 @@ pub fn run(_args: ProjectsArgs) {
         ]);
     }
 
-    for i in 1..=4 {
+    // Right-align the numeric columns (Open, Done, Closed, Total) which now
+    // start at index 2 after the Category column was inserted at index 1.
+    for i in 2..=5 {
         if let Some(col) = table.column_mut(i) {
             col.set_cell_alignment(CellAlignment::Right);
         }
