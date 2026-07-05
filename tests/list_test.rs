@@ -814,3 +814,17 @@ fn test_list_filter_category_no_match() {
         .success()
         .stdout(predicate::str::contains("No tasks."));
 }
+
+#[test]
+fn test_list_category_conflicts_with_project() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("tasks.db");
+
+    // --project and --category are mutually exclusive: clap rejects the
+    // combination before any query runs.
+    cmd(&db_path)
+        .args(["list", "--project", "job", "--category", "work"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("cannot be used with"));
+}

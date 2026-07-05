@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.9.1] - 2026-07-05
+
+### Changed
+
+- `list` の `--project` と `--category` を排他に変更。併用するとエラー（引数エラー・exit code 2）で弾くようにした (#320)
+
 ## [1.9.0] - 2026-07-05
 
 ### Added
