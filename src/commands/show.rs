@@ -1,15 +1,8 @@
 use clap::Args;
 
+use crate::commands::json_output::{print_json, TaskJson};
 use crate::config;
 use crate::db;
-
-fn escape_json(s: &str) -> String {
-    s.replace('\\', "\\\\")
-        .replace('"', "\\\"")
-        .replace('\n', "\\n")
-        .replace('\r', "\\r")
-        .replace('\t', "\\t")
-}
 
 #[derive(Args)]
 pub struct ShowArgs {
@@ -43,37 +36,20 @@ pub fn run(args: ShowArgs) {
         }
     };
 
-    let reminds = match db::get_reminds_for_task(&conn, task.id) {
+    let mut task = task;
+    task.reminds = match db::get_reminds_for_task(&conn, task.id) {
         Ok(r) => r,
         Err(_) => {
             eprintln!("Error: failed to read database: {}", db_path.display());
             std::process::exit(1);
         }
     };
+    let reminds = &task.reminds;
 
     if args.json {
-        let project = task
-            .project
-            .as_ref()
-            .map(|p| format!("\"{}\"", escape_json(p)))
-            .unwrap_or_else(|| "null".to_string());
-        let due = task
-            .due
-            .map(|d| format!("\"{}\"", d))
-            .unwrap_or_else(|| "null".to_string());
-        let remind_strs: Vec<String> = reminds.iter().map(|d| format!("\"{}\"", d)).collect();
-        println!(
-            "{{\"id\":{},\"title\":\"{}\",\"status\":\"{}\",\"project\":{},\"due\":{},\"remind\":[{}],\"important\":{},\"created\":\"{}\",\"updated\":\"{}\"}}",
-            task.id,
-            escape_json(&task.title),
-            task.status.as_str(),
-            project,
-            due,
-            remind_strs.join(","),
-            task.important,
-            task.created.format("%Y-%m-%d %H:%M:%S"),
-            task.updated.format("%Y-%m-%d %H:%M:%S"),
-        );
+        // Emit the same single-task JSON schema as `list`/`search` (pretty-printed,
+        // `reminds` plural, `done_at`/`source` fields), just as a single object.
+        print_json(&TaskJson::from(&task));
     } else {
         println!("ID: {}", task.id);
         println!("Title: {}", task.title);
